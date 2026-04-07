@@ -1,0 +1,28 @@
+services:
+  api:
+    build: .
+    container_name: agentick-be-api
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+
+  db:
+    image: postgres:18
+    container_name: agentick-be-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agentick_be
+    ports:
+      - "5432:5432"
+    volumes:
+      - agentick_be_data:/var/lib/postgresql
+
+volumes:
+  agentick_be_data:

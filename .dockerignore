@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+
+# Environments
+.venv
+.env
+.env.*
+env/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Tests/Linting cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# IDEs
+.vscode/
+.idea/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
