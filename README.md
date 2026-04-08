@@ -29,6 +29,12 @@ Nếu bạn muốn chạy trực tiếp trên máy để debug sâu:
 
 **Yêu cầu:** Cài đặt [uv](https://github.com/astral-sh/uv).
 
+Trước khi chạy, tạo file `.env` từ `.env.example` và thay giá trị bí mật:
+
+```powershell
+Copy-Item .env.example .env
+```
+
 ```powershell
 # 1. Cài đặt dependencies
 uv sync
@@ -39,6 +45,17 @@ uv sync
 # 3. Chạy Server với tính năng Hot Reload
 uv run uvicorn app.main:app --reload
 ```
+
+### Biến môi trường cần có
+
+- `APP_NAME`
+- `ENV`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_DB`
+- `DATABASE_URL`
+
+Lưu ý bảo mật: không commit giá trị thật của `POSTGRES_PASSWORD` và các secret khác lên git.
 
 ## 3. Quản lý Database (Alembic)
 
@@ -53,8 +70,6 @@ docker compose exec api uv run alembic upgrade head
 ```
 
 ---
-
-
 
 Tài liệu này giải thích dự án theo kiểu rất dễ đọc: từ ngoài vào trong, từ request đi đến database rồi quay ngược lại response. Nếu bạn mới học backend, cứ coi toàn bộ hệ thống như một nhà hàng:
 
