@@ -20,7 +20,7 @@ docker compose down
 docker compose down -v
 ```
 
-Sau khi chạy, API sẽ có sẵn tại: `http://localhost:8000/api/ping`
+Sau khi chạy, API sẽ có sẵn tại: `http://localhost:8000/api/v1/ping` và `http://localhost:8000/api/v2/ping`
 Tài liệu API (Swagger UI): `http://localhost:8000/docs`
 
 ## 2. Chạy Local (Không dùng Docker)
