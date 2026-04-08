@@ -11,6 +11,7 @@ services:
       - db
     volumes:
       - .:/app
+      - /app/.venv
 
   db:
     image: postgres:18

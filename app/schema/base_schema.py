@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import Any, Generic, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel
+
+T = TypeVar("T")
 
 
 class ModelBaseInfo(BaseModel):
@@ -10,10 +12,16 @@ class ModelBaseInfo(BaseModel):
     updated_at: datetime
 
 
+class ResponseSchema(BaseModel, Generic[T]):
+    success: bool = True
+    message: str = "Success"
+    data: Optional[T] = None
+
+
 class FindBase(BaseModel):
-    ordering: Optional[str]
-    page: Optional[int]
-    page_size: Optional[Union[int, str]]
+    ordering: Optional[str] = None
+    page: Optional[int] = None
+    page_size: Optional[Union[int, str]] = None
 
 
 class SearchOptions(FindBase):

@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import router as v1_router
-from app.api.v2.routes import router as v2_router
+
+# from app.api.v2.routes import router as v2_router
 from app.core.config import settings
 
 
@@ -17,7 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(v1_router, prefix=settings.API_V1_STR, tags=["v1"])
-app.include_router(v2_router, prefix=settings.API_V2_STR, tags=["v2"])
+# app.include_router(v2_router, prefix=settings.API_V2_STR, tags=["v2"])
 
 
 @app.get("/", tags=["health"])

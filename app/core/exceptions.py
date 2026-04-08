@@ -15,7 +15,7 @@ class DuplicatedError(AppError):
 
 class AuthError(AppError):
     def __init__(self, detail: Any = None) -> None:
-        super().__init__(status.HTTP_403_FORBIDDEN, detail)
+        super().__init__(status.HTTP_401_UNAUTHORIZED, detail)
 
 
 class NotFoundError(AppError):
