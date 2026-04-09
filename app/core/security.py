@@ -30,6 +30,24 @@ def create_access_token(subject: dict[str, Any], expires_delta: timedelta | None
         "iat": int(now.timestamp()),
         "nbf": int(now.timestamp()),
         "exp": int(expire.timestamp()),
+        "type": "access",
+    }
+    encoded_jwt = jwt.encode(payload, _get_secret_key(), algorithm=ALGORITHM)
+    expiration_datetime = expire.isoformat()
+    return encoded_jwt, expiration_datetime
+
+
+def create_refresh_token(subject: dict[str, Any], expires_delta: timedelta | None = None) -> tuple[str, str]:
+    now = datetime.now(timezone.utc)
+    expire = now + (
+        expires_delta or timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+    )
+    payload = {
+        **subject,
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
+        "type": "refresh",
     }
     encoded_jwt = jwt.encode(payload, _get_secret_key(), algorithm=ALGORITHM)
     expiration_datetime = expire.isoformat()

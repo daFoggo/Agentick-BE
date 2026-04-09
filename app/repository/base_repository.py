@@ -50,7 +50,7 @@ class BaseRepository:
                 },
             }
 
-    def read_by_id(self, id: int, eager: bool = False):
+    def read_by_id(self, id: str, eager: bool = False):
         with self.session_factory() as session:
             query = session.query(self.model)
             if eager:
@@ -72,25 +72,25 @@ class BaseRepository:
                 raise DuplicatedError(detail=str(e.orig))
             return query
 
-    def update(self, id: int, schema: T):
+    def update(self, id: str, schema: T):
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update(schema.model_dump(exclude_none=True))
             session.commit()
             return self.read_by_id(id)
 
-    def update_attr(self, id: int, column: str, value: Any):
+    def update_attr(self, id: str, column: str, value: Any):
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update({column: value})
             session.commit()
             return self.read_by_id(id)
 
-    def whole_update(self, id: int, schema: T):
+    def whole_update(self, id: str, schema: T):
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update(schema.model_dump())
             session.commit()
             return self.read_by_id(id)
 
-    def delete_by_id(self, id: int):
+    def delete_by_id(self, id: str):
         with self.session_factory() as session:
             query = session.query(self.model).filter(self.model.id == id).first()
             if not query:

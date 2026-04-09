@@ -36,11 +36,6 @@ def get_current_user(payload: dict[str, Any] = Depends(get_token_payload), db=De
     if not user_id:
         raise AuthError(detail="Invalid token payload.")
 
-    try:
-        user_id = int(user_id)
-    except (TypeError, ValueError):
-        raise AuthError(detail="Invalid user id in token.")
-
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise AuthError(detail="User not found.")

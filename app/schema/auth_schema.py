@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class SignIn(BaseModel):
@@ -36,6 +37,21 @@ class UserInfo(BaseModel):
 class SignInResponse(BaseModel):
     access_token: str
     expiration: str
+    refresh_token: str
+    refresh_expiration: str
     user_info: UserInfo
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    expiration: str
+    refresh_token: str
+    refresh_expiration: str
+
+    model_config = ConfigDict(populate_by_name=True)

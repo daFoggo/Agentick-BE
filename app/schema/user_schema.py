@@ -34,7 +34,7 @@ class UserRead(ModelBaseInfo, UserBase):
 
 
 class UserFind(FindBase):
-    id__eq: int | None = None
+    id__eq: str | None = None
     email__eq: EmailStr | None = None
     name__ilike: str | None = None
     is_active__eq: bool | None = None
