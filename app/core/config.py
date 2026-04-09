@@ -50,9 +50,7 @@ class Settings(BaseSettings):
     DB_PORT: str = "3306"
     DATABASE_URL: str | None = None
 
-    DATABASE_URI_FORMAT: str = (
-        "{db_engine}://{user}:{password}@{host}:{port}/{database}"
-    )
+    DATABASE_URI_FORMAT: str = "{db_engine}://{user}:{password}@{host}:{port}/{database}"
 
     # find query
     PAGE: int = 1
@@ -82,16 +80,9 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URI(self) -> str:
         if self.DATABASE_URL:
-            # Mask sensitive info for logging
-            print("DEBUG: Using DATABASE_URL from environment.")
             return self.DATABASE_URL
 
-        database = self.ENV_DATABASE_MAPPER.get(
-            self.ENV, self.ENV_DATABASE_MAPPER["dev"]
-        )
-        print(
-            f"DEBUG: Constructing URI. Host: {self.DB_HOST}, User: {self.DB_USER}, DB: {database}"
-        )
+        database = self.ENV_DATABASE_MAPPER.get(self.ENV, self.ENV_DATABASE_MAPPER["dev"])
         missing_values = [
             name
             for name, value in {
