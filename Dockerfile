@@ -9,26 +9,30 @@ COPY --from=uv_bin /uv /uvx /bin/
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    RELOAD=false
 
 WORKDIR /app
 
-# Install dependencies first (better caching)
-RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project
+# Copy dependency files first for better layer caching
+COPY uv.lock pyproject.toml ./
+
+# Install dependencies without cache mount for better compatibility on Railway
+RUN uv sync --frozen --no-install-project
 
 # Copy the rest of the application
 COPY . .
 
 # Final sync to install the project itself
-RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
-    uv sync --frozen
+RUN uv sync --frozen
 
 # Use the virtual environment by default
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Make startup script executable
+RUN chmod +x scripts/start.sh
+
+# Production command using the startup script
+CMD ["./scripts/start.sh"]
