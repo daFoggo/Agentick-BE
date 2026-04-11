@@ -4,36 +4,49 @@ Dự án Backend cho hệ thống Agentick, xây dựng trên nền tảng **Fas
 
 ---
 
-## 🚀 Các lệnh thường dùng (Quick Start)
+## 🚀 Hướng dấn chạy dự án lần đầu (Dành cho người mới)
 
-### 1. Quản lý Container (Docker)
-| Lệnh | Mô tả |
-| :--- | :--- |
-| `docker compose up --build` | Xây dựng và khởi chạy hệ thống (xem log trực tiếp) |
-| `docker compose up -d` | Chạy hệ thống ở chế độ chạy ngầm |
-| `docker compose down` | Dừng và xóa các container |
-| `docker compose down -v` | **Cẩn thận:** Dừng và xóa sạch toàn bộ dữ liệu Database |
-| `docker logs -f agentick-be-api` | Xem log trực tiếp của Backend |
+Chỉ cần làm đúng 3 bước theo thứ tự sau để khởi chạy dự án:
 
-### 2. Quản lý Database (Alembic Migrations)
-Bạn cần chạy các lệnh này mỗi khi thay đổi cấu trúc Database (thêm trường, thêm bảng). Chạy trực tiếp qua container đang hoạt động:
+**Bước 1: Cấu hình môi trường (.env)**
+Tạo một file có tên là `.env` ở ngay thư mục gốc của project (nơi chứa file `docker-compose.yml`) với các thông số bắt buộc:
+```env
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+POSTGRES_DB=
+DATABASE_URL=
+SECRET_KEY=
+ENV=dev
+```
+*(Lưu ý: KHÔNG bao giờ commit file này lên Git)*
 
-| Lệnh | Mô tả |
-| :--- | :--- |
-| `docker exec agentick-be-api alembic revision --autogenerate -m "Mô tả"` | Tự động tạo bản cập nhật mới (migration script) |
-| `docker exec agentick-be-api alembic upgrade head` | Áp dụng tất cả các thay đổi vào Database thật |
-| `docker exec agentick-be-api alembic history` | Xem lịch sử các bản migration |
+**Bước 2: Khởi chạy hệ thống bằng Docker**
+Build và chạy các dịch vụ (Database & API) bằng lệnh sau:
+```bash
+docker compose up -d --build
+```
+*(Chờ khoảng 5-10 giây để cơ sở dữ liệu khởi động hoàn toàn)*
+
+**Bước 3: Khởi tạo các bảng trong Database (Migrations)**
+Container đã chạy nhưng database hiện tại vẫn đang trống. Chạy lệnh sau để tự động tạo cấu trúc bảng (như bảng `user`, ...):
+```bash
+docker exec agentick-be-api alembic upgrade head
+```
+
+🎉 **Xong!** Hệ thống API đã sẵn sàng. Truy cập ngay tài liệu API tại: `http://localhost:8000/docs`
 
 ---
 
-## 🛠 Cấu hình Môi trường (.env)
+## 🛠 Các lệnh quản lý nâng cao (Maintenance)
 
-File `.env` là nơi chứa các bí mật và cấu hình. **KHÔNG bao giờ commit file này lên Git.**
+Dưới đây là một số lệnh cần thiết khi phát triển thêm tính năng hoặc fix bug:
 
-Các biến quan trọng:
-- `SECRET_KEY`: Chìa khóa để mã hóa JWT Token. (Đã bổ sung chuỗi bảo mật).
-- `DATABASE_URL`: Đường dẫn kết nối DB (Đã được cấu hình chuẩn cho Docker).
-- `POSTGRES_PASSWORD`: Mật khẩu của Database PostgreSQL.
+| Lệnh | Mô tả |
+| :--- | :--- |
+| `docker logs -f agentick-be-api` | Xem log đang chạy trực tiếp của Backend (để trace lỗi) |
+| `docker compose down -v` | **Hiểm hoạ:** Dừng và xoá sạch tinh hoàn toàn Database đang có, đưa về trạng thái trắng xoá để tạo lại lỗi từ đầu |
+| `docker exec agentick-be-api alembic revision --autogenerate -m "tên"` | Tự động tạo bản cập nhật mới (file migration python) mỗi khi sửa file `.py` thuộc Model cấu trúc Database |
+| `docker exec agentick-be-api alembic upgrade head` | Áp dụng các thay đổi trong file migration vào trong Database thật |
 
 ---
 
