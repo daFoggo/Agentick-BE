@@ -61,41 +61,55 @@ class BaseRepository:
                 raise NotFoundError(detail=f"not found id : {id}")
             return query
 
-    def create(self, schema: T):
+    def create(self, schema: T | dict, auto_commit: bool = True):
+        data = schema.model_dump() if hasattr(schema, "model_dump") else schema
         with self.session_factory() as session:
-            query = self.model(**schema.model_dump())
+            query = self.model(**data)
             try:
                 session.add(query)
-                session.commit()
-                session.refresh(query)
+                if auto_commit:
+                    session.commit()
+                    session.refresh(query)
+                else:
+                    session.flush()
             except IntegrityError as e:
                 raise DuplicatedError(detail=str(e.orig))
             return query
 
-    def update(self, id: str, schema: T):
+    def update(self, id: str, schema: T | dict, auto_commit: bool = True):
+        data = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
         with self.session_factory() as session:
-            session.query(self.model).filter(self.model.id == id).update(schema.model_dump(exclude_none=True))
-            session.commit()
+            session.query(self.model).filter(self.model.id == id).update(data)
+            if auto_commit:
+                session.commit()
             return self.read_by_id(id)
 
-    def update_attr(self, id: str, column: str, value: Any):
+    def update_attr(self, id: str, column: str, value: Any, auto_commit: bool = True):
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update({column: value})
-            session.commit()
+            if auto_commit:
+                session.commit()
             return self.read_by_id(id)
 
-    def whole_update(self, id: str, schema: T):
+    def whole_update(self, id: str, schema: T | dict, auto_commit: bool = True):
+        data = schema.model_dump() if hasattr(schema, "model_dump") else schema
         with self.session_factory() as session:
-            session.query(self.model).filter(self.model.id == id).update(schema.model_dump())
-            session.commit()
+            session.query(self.model).filter(self.model.id == id).update(data)
+            if auto_commit:
+                session.commit()
             return self.read_by_id(id)
 
-    def delete_by_id(self, id: str):
+    def delete_by_id(self, id: str, auto_commit: bool = True):
         with self.session_factory() as session:
             query = session.query(self.model).filter(self.model.id == id).first()
             if not query:
                 raise NotFoundError(detail=f"not found id : {id}")
             session.delete(query)
+            if auto_commit:
+                session.commit()
+
+    def commit(self):
+        with self.session_factory() as session:
             session.commit()
 
     def close_scoped_session(self):

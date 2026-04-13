@@ -19,13 +19,16 @@ from app.schema.auth_schema import (
     UserInfo,
 )
 from app.schema.user_schema import UserCreateDB
+from app.schema.team_schema import TeamCreate
 from app.services.user_service import UserService
+from app.services.team_service import TeamService
 
 
 class AuthService:
-    def __init__(self, user_repository: UserRepository, user_service: UserService) -> None:
+    def __init__(self, user_repository: UserRepository, user_service: UserService, team_service: TeamService) -> None:
         self._user_repository = user_repository
         self._user_service = user_service
+        self._team_service = team_service
 
     def sign_up(self, schema: SignUp) -> UserInfo:
         existing_user = self._user_repository.read_by_email(str(schema.email))
@@ -39,8 +42,28 @@ class AuthService:
             hashed_password=get_password_hash(schema.password),
             user_token=uuid4().hex,
         )
-        user = self._user_repository.create(user_schema)
-        return self._user_service.to_user_info(user)
+        
+        try:
+            # Create user without committing
+            user = self._user_repository.create(user_schema, auto_commit=False)
+
+            # Create default team without committing
+            team_create = TeamCreate(
+                name=f"{user.name}'s Team",
+                description=f"Default team for {user.name}"
+            )
+            team = self._team_service.create_team(team_create, user, auto_commit=False)
+
+            # Manual commit for the entire transaction
+            self._user_repository.commit()
+            
+            user_info = self._user_service.to_user_info(user)
+            user_info.default_team_id = team.id
+            return user_info
+        except Exception as e:
+            # In case of any error, we don't commit. 
+            # SQLAlchemy session from get_db will handle rollback on exception.
+            raise e
 
     def sign_in(self, schema: SignIn) -> SignInResponse:
         user = self._user_repository.read_by_email(str(schema.email__eq))
@@ -61,12 +84,16 @@ class AuthService:
         access_token, expiration = create_access_token(subject)
         refresh_token, refresh_expiration = create_refresh_token(subject)
 
+        user_info = self._user_service.to_user_info(user)
+        if user.owned_teams:
+            user_info.default_team_id = user.owned_teams[0].id
+
         return SignInResponse(
             access_token=access_token,
             expiration=expiration,
             refresh_token=refresh_token,
             refresh_expiration=refresh_expiration,
-            user_info=self._user_service.to_user_info(user),
+            user_info=user_info,
         )
 
     def refresh_token(self, payload: RefreshTokenRequest) -> TokenResponse:

@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_db, get_current_active_user
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 def get_user_service(db=Depends(get_db)) -> UserService:
-    user_repository = UserRepository(lambda: db)
+    user_repository = UserRepository(lambda: nullcontext(db))
     return UserService(user_repository=user_repository)
 
 

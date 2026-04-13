@@ -13,9 +13,7 @@ class SignUp(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     name: str = Field(min_length=1, max_length=255)
-    avatar_url: str | None = Field(default=None, alias="avatarUrl", max_length=512)
-
-    model_config = ConfigDict(populate_by_name=True)
+    avatar_url: str | None = Field(default=None, max_length=512)
 
 
 class Payload(BaseModel):
@@ -28,10 +26,11 @@ class UserInfo(BaseModel):
     id: str
     name: str
     email: EmailStr
-    avatar_url: str | None = Field(default=None, alias="avatarUrl")
-    created_at: datetime | None = Field(default=None, alias="createdAt")
+    avatar_url: str | None = Field(default=None)
+    default_team_id: str | None = Field(default=None)
+    created_at: datetime | None = Field(default=None)
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SignInResponse(BaseModel):
@@ -40,8 +39,6 @@ class SignInResponse(BaseModel):
     refresh_token: str
     refresh_expiration: str
     user_info: UserInfo
-
-    model_config = ConfigDict(populate_by_name=True)
 
 
 class RefreshTokenRequest(BaseModel):
@@ -53,5 +50,3 @@ class TokenResponse(BaseModel):
     expiration: str
     refresh_token: str
     refresh_expiration: str
-
-    model_config = ConfigDict(populate_by_name=True)

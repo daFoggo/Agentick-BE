@@ -28,8 +28,8 @@ class SearchOptions(FindBase):
     total_count: Optional[int]
 
 
-class FindResult(BaseModel):
-    founds: Optional[List]
+class FindResult(BaseModel, Generic[T]):
+    founds: Optional[List[T]]
     search_options: Optional[SearchOptions]
 
 
