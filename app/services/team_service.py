@@ -48,3 +48,6 @@ class TeamService(BaseService):
         
         # Soft delete
         return self._repository.update_attr(team_id, "is_deleted", True)
+
+    def get_my_teams(self, user_id: str):
+        return self._repository.get_my_teams(user_id)

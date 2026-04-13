@@ -57,9 +57,7 @@ class AuthService:
             # Manual commit for the entire transaction
             self._user_repository.commit()
             
-            user_info = self._user_service.to_user_info(user)
-            user_info.default_team_id = team.id
-            return user_info
+            return self._user_service.to_user_info(user)
         except Exception as e:
             # In case of any error, we don't commit. 
             # SQLAlchemy session from get_db will handle rollback on exception.
@@ -85,8 +83,6 @@ class AuthService:
         refresh_token, refresh_expiration = create_refresh_token(subject)
 
         user_info = self._user_service.to_user_info(user)
-        if user.owned_teams:
-            user_info.default_team_id = user.owned_teams[0].id
 
         return SignInResponse(
             access_token=access_token,

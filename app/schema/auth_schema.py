@@ -27,7 +27,6 @@ class UserInfo(BaseModel):
     name: str
     email: EmailStr
     avatar_url: str | None = Field(default=None)
-    default_team_id: str | None = Field(default=None)
     created_at: datetime | None = Field(default=None)
 
     model_config = ConfigDict(from_attributes=True)

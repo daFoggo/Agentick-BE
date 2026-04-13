@@ -48,6 +48,15 @@ def get_teams(
     return ResponseSchema(data=result)
 
 
+@router.get("/me", response_model=ResponseSchema[List[TeamRead]])
+def get_my_teams(
+    current_user: User = Depends(get_current_active_user),
+    service: TeamService = Depends(get_team_service)
+):
+    result = service.get_my_teams(current_user.id)
+    return ResponseSchema(data=result)
+
+
 @router.get("/{team_id}", response_model=ResponseSchema[TeamRead])
 def get_team(
     team_id: str,
