@@ -44,7 +44,8 @@ class UserSearch(BaseModel):
     """Query params cho search user — dùng cho flow invite member"""
     q: str = Field(min_length=1, max_length=100, description="Search by email or name")
     limit: int = Field(default=10, ge=1, le=50, description="Max results returned")
-    team_id: str | None = Field(default=None, description="Exclude members already in this team")
+    exclude_team_id: str | None = Field(default=None, description="Exclude members already in this team")
+    exclude_project_id: str | None = Field(default=None, description="Exclude members already in this project")
 
 
 class UserSearchResult(BaseModel):

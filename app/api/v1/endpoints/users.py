@@ -5,6 +5,7 @@ from app.core.dependencies import get_db, get_current_active_user
 from app.model.user import User
 from app.repository.user_repository import UserRepository
 from app.repository.team_member_repository import TeamMemberRepository
+from app.repository.project_member_repository import ProjectMemberRepository
 from app.schema.base_schema import ResponseSchema
 from app.schema.auth_schema import UserInfo
 from app.schema.user_schema import UserSearch, UserSearchResult
@@ -16,9 +17,11 @@ router = APIRouter(prefix="/users", tags=["users"])
 def get_user_service(db=Depends(get_db)) -> UserService:
     user_repository = UserRepository(lambda: nullcontext(db))
     team_member_repository = TeamMemberRepository(lambda: nullcontext(db))
+    project_member_repository = ProjectMemberRepository(lambda: nullcontext(db))
     return UserService(
         user_repository=user_repository,
         team_member_repository=team_member_repository,
+        project_member_repository=project_member_repository,
     )
 
 
@@ -39,6 +42,7 @@ def search_users(
         query=search_query.q,
         limit=search_query.limit,
         exclude_user_ids=[current_user.id],
-        team_id=search_query.team_id,
+        exclude_team_id=search_query.exclude_team_id,
+        exclude_project_id=search_query.exclude_project_id,
     )
     return ResponseSchema(data=results, message="Users found")

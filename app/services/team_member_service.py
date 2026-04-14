@@ -1,5 +1,6 @@
 from app.repository.team_member_repository import TeamMemberRepository
 from app.repository.team_repository import TeamRepository
+from app.repository.project_member_repository import ProjectMemberRepository
 from app.schema.team_member_schema import TeamMemberCreate, TeamMemberUpdate, TeamMemberFind
 from app.services.base_service import BaseService
 from app.model.user import User
@@ -7,9 +8,15 @@ from app.core.exceptions import AuthError, NotFoundError, DuplicatedError
 
 
 class TeamMemberService(BaseService):
-    def __init__(self, team_member_repository: TeamMemberRepository, team_repository: TeamRepository) -> None:
+    def __init__(
+        self,
+        team_member_repository: TeamMemberRepository,
+        team_repository: TeamRepository,
+        project_member_repository: ProjectMemberRepository,
+    ) -> None:
         super().__init__(repository=team_member_repository)
         self._team_repository = team_repository
+        self._project_member_repository = project_member_repository
 
     def add_member(self, team_id: str, schema: TeamMemberCreate, current_user: User):
         # 1. Check team exists and not deleted
@@ -33,8 +40,18 @@ class TeamMemberService(BaseService):
         member_data["team_id"] = team_id
         return self._repository.create(member_data)
 
-    def get_members(self, team_id: str):
-        return self._repository.read_by_options(TeamMemberFind(team_id__eq=team_id))
+    def get_members(self, find_query: TeamMemberFind):
+        if find_query.q:
+            return self._repository.search_members(
+                team_id=find_query.team_id__eq,
+                q=find_query.q,
+                page=find_query.page,
+                page_size=find_query.page_size
+            )
+        return self._repository.read_by_options(find_query)
+
+    def get_member_project_count(self, team_id: str, user_id: str) -> int:
+        return self._project_member_repository.count_projects_in_team(team_id, user_id)
 
     def update_member_role(self, team_id: str, user_id: str, schema: TeamMemberUpdate, current_user: User):
         # Check permission
@@ -68,4 +85,8 @@ class TeamMemberService(BaseService):
             if len(all_owners.get("founds", [])) <= 1:
                 raise AuthError(detail="Cannot remove the only owner of the team.")
 
+        # Cascading removal from all projects in the team
+        self._project_member_repository.remove_from_all_team_projects(team_id, user_id)
+
+        # Remove from the team itself
         return self._repository.delete_by_id(target_member["founds"][0].id)

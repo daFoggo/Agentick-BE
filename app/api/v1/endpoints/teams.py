@@ -6,9 +6,10 @@ from app.core.dependencies import get_db, get_current_active_user
 from app.model.user import User
 from app.repository.team_repository import TeamRepository
 from app.repository.team_member_repository import TeamMemberRepository
+from app.repository.project_member_repository import ProjectMemberRepository
 from app.schema.base_schema import ResponseSchema, FindResult
 from app.schema.team_schema import TeamCreate, TeamRead, TeamUpdate, TeamFind
-from app.schema.team_member_schema import TeamMemberCreate, TeamMemberRead, TeamMemberUpdate
+from app.schema.team_member_schema import TeamMemberCreate, TeamMemberRead, TeamMemberUpdate, TeamMemberFind, TeamMemberProjectCount
 from app.services.team_service import TeamService
 from app.services.team_member_service import TeamMemberService
 
@@ -24,7 +25,12 @@ def get_team_service(db=Depends(get_db)) -> TeamService:
 def get_team_member_service(db=Depends(get_db)) -> TeamMemberService:
     team_member_repository = TeamMemberRepository(lambda: nullcontext(db))
     team_repository = TeamRepository(lambda: nullcontext(db))
-    return TeamMemberService(team_member_repository=team_member_repository, team_repository=team_repository)
+    project_member_repository = ProjectMemberRepository(lambda: nullcontext(db))
+    return TeamMemberService(
+        team_member_repository=team_member_repository,
+        team_repository=team_repository,
+        project_member_repository=project_member_repository,
+    )
 
 
 # --- Team Endpoints ---
@@ -92,10 +98,22 @@ def delete_team(
 @router.get("/{team_id}/members", response_model=ResponseSchema[FindResult[TeamMemberRead]])
 def get_team_members(
     team_id: str,
+    find_query: TeamMemberFind = Depends(),
     service: TeamMemberService = Depends(get_team_member_service)
 ):
-    result = service.get_members(team_id)
+    find_query.team_id__eq = team_id
+    result = service.get_members(find_query)
     return ResponseSchema(data=result)
+
+
+@router.get("/{team_id}/members/{user_id}/project-count", response_model=ResponseSchema[TeamMemberProjectCount])
+def get_member_project_count(
+    team_id: str,
+    user_id: str,
+    service: TeamMemberService = Depends(get_team_member_service)
+):
+    count = service.get_member_project_count(team_id, user_id)
+    return ResponseSchema(data=TeamMemberProjectCount(count=count))
 
 
 @router.post("/{team_id}/members", response_model=ResponseSchema[TeamMemberRead])

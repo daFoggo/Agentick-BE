@@ -20,15 +20,24 @@ from app.schema.auth_schema import (
 )
 from app.schema.user_schema import UserCreateDB
 from app.schema.team_schema import TeamCreate
+from app.schema.project_schema import ProjectCreate
 from app.services.user_service import UserService
 from app.services.team_service import TeamService
+from app.services.project_service import ProjectService
 
 
 class AuthService:
-    def __init__(self, user_repository: UserRepository, user_service: UserService, team_service: TeamService) -> None:
+    def __init__(
+        self,
+        user_repository: UserRepository,
+        user_service: UserService,
+        team_service: TeamService,
+        project_service: ProjectService,
+    ) -> None:
         self._user_repository = user_repository
         self._user_service = user_service
         self._team_service = team_service
+        self._project_service = project_service
 
     def sign_up(self, schema: SignUp) -> UserInfo:
         existing_user = self._user_repository.read_by_email(str(schema.email))
@@ -53,6 +62,14 @@ class AuthService:
                 description=f"Default team for {user.name}"
             )
             team = self._team_service.create_team(team_create, user, auto_commit=False)
+
+            # Create default project without committing
+            project_create = ProjectCreate(
+                team_id=team.id,
+                name=f"{user.name}'s Project",
+                description=f"Default project for {user.name}",
+            )
+            self._project_service.create_project(project_create, user)
 
             # Manual commit for the entire transaction
             self._user_repository.commit()

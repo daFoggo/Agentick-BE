@@ -1,101 +1,113 @@
-# Agentick Backend - Hướng dẫn vận hành
+# Agentick Backend
 
-Dự án Backend cho hệ thống Agentick, xây dựng trên nền tảng **FastAPI (Clean Architecture)**, sử dụng **PostgreSQL** và quản lý môi trường bằng **Docker**.
+Agentick is an AI Agent-powered project management platform that proactively detects deadline risks and improves deadline estimation over time using accumulated execution behavior data.
 
 ---
 
-## 🚀 Hướng dấn chạy dự án lần đầu (Dành cho người mới)
+## 🚀 Installation & Setup
 
-Chỉ cần làm đúng 3 bước theo thứ tự sau để khởi chạy dự án:
+This project uses **Docker** and **Alembic** to ensure a consistent environment and database schema. 
 
-**Bước 1: Cấu hình môi trường (.env)**
-Tạo một file có tên là `.env` ở ngay thư mục gốc của project (nơi chứa file `docker-compose.yml`) với các thông số bắt buộc:
+### 1. Environment Configuration
+Create a `.env` file in the root directory (where `docker-compose.yml` is located) with the following variables:
 ```env
-POSTGRES_USER=
-POSTGRES_PASSWORD=
-POSTGRES_DB=
-DATABASE_URL=
-SECRET_KEY=
+# Database Credentials
+POSTGRES_USER=agentick_user
+POSTGRES_PASSWORD=agentick_password
+POSTGRES_DB=agentick_db
+DATABASE_URL=postgresql://agentick_user:agentick_password@db:5432/agentick_db
+
+# Security
+SECRET_KEY=your_super_secret_key
 ENV=dev
 ```
-*(Lưu ý: KHÔNG bao giờ commit file này lên Git)*
+> [!IMPORTANT]
+> Never commit the `.env` file to version control.
 
-**Bước 2: Khởi chạy hệ thống bằng Docker**
-Build và chạy các dịch vụ (Database & API) bằng lệnh sau:
+### 2. Starting the System with Docker
+We use Docker Compose to orchestrate the API and Database containers.
 ```bash
 docker compose up -d --build
 ```
-*(Chờ khoảng 5-10 giây để cơ sở dữ liệu khởi động hoàn toàn)*
+*Wait 5-10 seconds for the database to be ready.*
 
-**Bước 3: Khởi tạo các bảng trong Database (Migrations)**
-Container đã chạy nhưng database hiện tại vẫn đang trống. Chạy lệnh sau để tự động tạo cấu trúc bảng (như bảng `user`, ...):
+### 3. Database Migrations (Alembic)
+The database starts empty. You must apply migrations to create the tables.
 ```bash
 docker exec agentick-be-api alembic upgrade head
 ```
 
-🎉 **Xong!** Hệ thống API đã sẵn sàng. Truy cập ngay tài liệu API tại: `http://localhost:8000/docs`
+**Result:** Your API is now live at `http://localhost:8000/docs`.
 
 ---
 
-## 🛠 Các lệnh quản lý nâng cao (Maintenance)
+## 🛠 Maintenance Commands
 
-Dưới đây là một số lệnh cần thiết khi phát triển thêm tính năng hoặc fix bug:
-
-| Lệnh | Mô tả |
+| Action | Command |
 | :--- | :--- |
-| `docker logs -f agentick-be-api` | Xem log đang chạy trực tiếp của Backend (để trace lỗi) |
-| `docker compose down -v` | **Hiểm hoạ:** Dừng và xoá sạch tinh hoàn toàn Database đang có, đưa về trạng thái trắng xoá để tạo lại lỗi từ đầu |
-| `docker exec agentick-be-api alembic revision --autogenerate -m "tên"` | Tự động tạo bản cập nhật mới (file migration python) mỗi khi sửa file `.py` thuộc Model cấu trúc Database |
-| `docker exec agentick-be-api alembic upgrade head` | Áp dụng các thay đổi trong file migration vào trong Database thật |
+| **Check Logs** | `docker logs -f agentick-be-api` |
+| **Create Migration** | `docker exec agentick-be-api alembic revision --autogenerate -m "description"` |
+| **Apply Migration** | `docker exec agentick-be-api alembic upgrade head` |
+| **Reset Database** | `docker compose down -v` (⚠️ Deletes all data) |
 
 ---
 
-## 📐 Kiến trúc Phản hồi (Standard Response Format)
+## 📐 Project Structure
 
-Dự án đã được chuẩn hóa format trả về cho tất cả API theo chuẩn RESTful:
+Agentick-BE follows the **Clean Architecture** pattern to separate concerns and improve maintainability.
 
+### Folder Breakdown
+- `app/api/v1/endpoints/`: Handles HTTP requests, input validation, and formatting responses.
+- `app/services/`: Contains core business logic and cross-repository coordination.
+- `app/repository/`: Handles data access and SQLAlchemy queries (Inherits from `base_repository.py`).
+- `app/model/`: Defines database tables using SQLAlchemy (Inherits from `base_model.py`).
+- `app/schema/`: Defines data validation and serialization using Pydantic.
+- `app/core/`: System-wide configurations (Security, Database, Dependencies).
+- `migrations/`: Historical records of database schema changes managed by Alembic.
+
+### Data Flow Example
+When a client requests `POST /api/v1/auth/sign-in`:
+1. **Router**: Receives the request in `app/api/v1/endpoints/auth.py`.
+2. **Dependency**: A specific `get_auth_service` function instantiates the service and its required repositories.
+3. **Service**: `AuthService` performs logic (e.g., matching hashed passwords).
+4. **Repository**: `UserRepository` fetches raw data from PostgreSQL.
+5. **Response**: The Service returns the result, which the endpoint wraps in a standardized `ResponseSchema`.
+
+---
+
+## 🏗 Development Pattern
+
+To maintain a consistent codebase, follow these steps when adding a new feature:
+
+1.  **Define Model**: Create the table structure in `app/model/` (kế thừa `BaseModel` từ `base_model.py`).
+2.  **Define Schemas**: Create Pydantic classes for Input/Output in `app/schema/`.
+3.  **Implement Repository**: Create a repository in `app/repository/` (kế thừa `BaseRepository` từ `base_repository.py`).
+4.  **Implement Service**: Write business logic in `app/services/`.
+5.  **Create Endpoint**: Define routes in `app/api/v1/endpoints/`.
+6.  **Setup Injection**: Implement a `get_<feature>_service` function in the endpoint file to wire dependencies.
+7.  **Migration**: 
+    - Generate: `docker exec agentick-be-api alembic revision --autogenerate -m "Add feature name"`
+    - Apply: `docker exec agentick-be-api alembic upgrade head`
+
+### Standard Response Format
 ```json
 {
   "success": true,
-  "message": "Thông báo thành công/thất bại",
-  "data": { ... dữ liệu thực tế ... }
+  "message": "Information message",
+  "data": { ... }
 }
 ```
 
-- **Mã lỗi 401 (Unauthorized)**: Trả về khi sai mật khẩu, sai email hoặc Token hết hạn.
-- **Mã lỗi 422 (Unprocessable Entity)**: Trả về khi dữ liệu đầu vào không hợp lệ (ví dụ: mật khẩu ngắn hơn 6 ký tự).
-
 ---
 
-## 📁 Cấu trúc Thư mục
+## 📚 Recommended Documentation
 
-- `app/api/v1/endpoints/`: Nơi định nghĩa các Route (URL).
-- `app/services/`: Nơi xử lý logic nghiệp vụ chính (Business Logic).
-- `app/repository/`: Nơi tương tác trực tiếp với Database (SQLAlchemy).
-- `app/model/`: Nơi định nghĩa cấu trúc bảng Database.
-- `app/schema/`: Nơi định nghĩa kiểu dữ liệu Input/Output (Pydantic).
-- `migrations/`: Lưu trữ các bản ghi thay đổi cấu trúc DB.
-
----
-
-## 🛡 Bảo mật & Quy tắc Code
-
-1. **Password**: Độ dài tối thiểu **6 ký tự**. Được mã hóa bằng Argon2/Bcrypt trước khi lưu.
-2. **JWT**: Sử dụng Bearer Token để xác thực người dùng.
-3. **CORS**: Hiện đang cho phép mọi nguồn (`*`) để thuận tiện phát triển. Cần giới hạn lại khi triển khai thực tế.
-4. **Validation**: Luôn sử dụng Pydantic Schema để kiểm tra dữ liệu từ Client gửi lên.
-
----
-
-## 🔗 Tài liệu API (Interactive Docs)
-Sau khi khởi chạy Docker thành công, bạn có thể trSau khi chạy, API sẽ có sẵn tại: `http://localhost:8000/api/v1/ping`
-Tài liệu API (Swagger UI): `http://localhost:8000/docs`
-
----
-
-## 📘 Tài liệu Kỹ thuật & Kiến trúc
-Để hiểu sâu hơn về cách tổ chức Code và quy trình phát triển, hãy đọc các tài liệu sau:
-- [Kiến trúc dự án (Clean Architecture)](./docs/ARCHITECTURE.md) - Giải thích về các tầng Service, Repository, v.v.
-- [Quy trình phát triển tính năng mới](./docs/FEATURE_DEV_PATTERN.md)
-
----
+| Technology | Link |
+| :--- | :--- |
+| **FastAPI** | [https://fastapi.tiangolo.com/](https://fastapi.tiangolo.com/) |
+| **SQLAlchemy** | [https://www.sqlalchemy.org/](https://www.sqlalchemy.org/) |
+| **Pydantic** | [https://docs.pydantic.dev/](https://docs.pydantic.dev/) |
+| **Alembic** | [https://alembic.sqlalchemy.org/](https://alembic.sqlalchemy.org/) |
+| **UV (Package Manager)** | [https://docs.astral.sh/uv/](https://docs.astral.sh/uv/) |
+| **PostgreSQL** | [https://www.postgresql.org/](https://www.postgresql.org/) |
+| **Docker** | [https://www.docker.com/](https://www.docker.com/) |
