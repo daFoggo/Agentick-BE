@@ -38,3 +38,20 @@ class UserFind(FindBase):
     email__eq: EmailStr | None = None
     name__ilike: str | None = None
     is_active__eq: bool | None = None
+
+
+class UserSearch(BaseModel):
+    """Query params cho search user — dùng cho flow invite member"""
+    q: str = Field(min_length=1, max_length=100, description="Search by email or name")
+    limit: int = Field(default=10, ge=1, le=50, description="Max results returned")
+    team_id: str | None = Field(default=None, description="Exclude members already in this team")
+
+
+class UserSearchResult(BaseModel):
+    """Kết quả search — chỉ trả info cần thiết, KHÔNG trả sensitive data"""
+    id: str
+    name: str
+    email: EmailStr
+    avatar_url: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
