@@ -48,33 +48,53 @@ class ProjectService(BaseService):
 
     def _seed_project_catalogs(self, project_id: str):
         """Seed default TaskStatus, TaskType, and TaskPriority for a new project."""
+        def _mark_single_default(items: list[dict], default_index: int = 0, completed_index: int | None = None) -> list[dict]:
+            normalized_items: list[dict] = []
+            for index, item in enumerate(items):
+                normalized_item = item.copy()
+                normalized_item["is_default"] = index == default_index
+                if completed_index is not None and "is_completed" in normalized_item:
+                    normalized_item["is_completed"] = index == completed_index
+                normalized_items.append(normalized_item)
+            return normalized_items
+
         # Default Task Statuses
-        statuses = [
-            {"project_id": project_id, "name": "To Do", "color": "#808080", "order": 0, "is_default": True, "is_completed": False},
-            {"project_id": project_id, "name": "In Progress", "color": "#0066CC", "order": 1, "is_default": True, "is_completed": False},
-            {"project_id": project_id, "name": "In Review", "color": "#FF9900", "order": 2, "is_default": True, "is_completed": False},
-            {"project_id": project_id, "name": "Done", "color": "#00CC00", "order": 3, "is_default": True, "is_completed": True},
-        ]
+        statuses = _mark_single_default(
+            [
+                {"project_id": project_id, "name": "To Do", "color": "#808080", "order": 0, "is_completed": False},
+                {"project_id": project_id, "name": "In Progress", "color": "#0066CC", "order": 1, "is_completed": False},
+                {"project_id": project_id, "name": "In Review", "color": "#FF9900", "order": 2, "is_completed": False},
+                {"project_id": project_id, "name": "Done", "color": "#00CC00", "order": 3, "is_completed": False},
+            ],
+            default_index=0,
+            completed_index=3,
+        )
         for status in statuses:
             self._task_status_repository.create(status)
 
         # Default Task Types
-        types = [
-            {"project_id": project_id, "name": "Feature", "color": "#0066CC", "icon": "star", "order": 0, "is_default": True},
-            {"project_id": project_id, "name": "Bug", "color": "#DD0000", "icon": "bug", "order": 1, "is_default": True},
-            {"project_id": project_id, "name": "Improvement", "color": "#FF9900", "icon": "zap", "order": 2, "is_default": True},
-            {"project_id": project_id, "name": "Task", "color": "#6600CC", "icon": "check", "order": 3, "is_default": True},
-        ]
+        types = _mark_single_default(
+            [
+                {"project_id": project_id, "name": "Feature", "color": "#0066CC", "icon": "star", "order": 0},
+                {"project_id": project_id, "name": "Bug", "color": "#DD0000", "icon": "bug", "order": 1},
+                {"project_id": project_id, "name": "Improvement", "color": "#FF9900", "icon": "zap", "order": 2},
+                {"project_id": project_id, "name": "Task", "color": "#6600CC", "icon": "check", "order": 3},
+            ],
+            default_index=0,
+        )
         for task_type in types:
             self._task_type_repository.create(task_type)
 
         # Default Task Priorities
-        priorities = [
-            {"project_id": project_id, "name": "Low", "color": "#00CC00", "level": 0, "order": 0, "is_default": True},
-            {"project_id": project_id, "name": "Medium", "color": "#FFCC00", "level": 1, "order": 1, "is_default": True},
-            {"project_id": project_id, "name": "High", "color": "#FF6600", "level": 2, "order": 2, "is_default": True},
-            {"project_id": project_id, "name": "Urgent", "color": "#DD0000", "level": 3, "order": 3, "is_default": True},
-        ]
+        priorities = _mark_single_default(
+            [
+                {"project_id": project_id, "name": "Low", "color": "#00CC00", "level": 0, "order": 0},
+                {"project_id": project_id, "name": "Medium", "color": "#FFCC00", "level": 1, "order": 1},
+                {"project_id": project_id, "name": "High", "color": "#FF6600", "level": 2, "order": 2},
+                {"project_id": project_id, "name": "Urgent", "color": "#DD0000", "level": 3, "order": 3},
+            ],
+            default_index=0,
+        )
         for priority in priorities:
             self._task_priority_repository.create(priority)
 
