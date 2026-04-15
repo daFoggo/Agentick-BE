@@ -9,6 +9,9 @@ from app.repository.project_member_repository import ProjectMemberRepository
 from app.repository.project_repository import ProjectRepository
 from app.repository.team_member_repository import TeamMemberRepository
 from app.repository.team_repository import TeamRepository
+from app.repository.task_status_repository import TaskStatusRepository
+from app.repository.task_type_repository import TaskTypeRepository
+from app.repository.task_priority_repository import TaskPriorityRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.project_member_schema import ProjectMemberCreate, ProjectMemberRead, ProjectMemberUpdate
 from app.schema.project_schema import ProjectCreate, ProjectFind, ProjectRead, ProjectUpdate
@@ -23,11 +26,17 @@ def get_project_service(db=Depends(get_db)) -> ProjectService:
     project_member_repository = ProjectMemberRepository(lambda: nullcontext(db))
     team_repository = TeamRepository(lambda: nullcontext(db))
     team_member_repository = TeamMemberRepository(lambda: nullcontext(db))
+    task_status_repository = TaskStatusRepository(lambda: nullcontext(db))
+    task_type_repository = TaskTypeRepository(lambda: nullcontext(db))
+    task_priority_repository = TaskPriorityRepository(lambda: nullcontext(db))
     return ProjectService(
         project_repository=project_repository,
         team_repository=team_repository,
         team_member_repository=team_member_repository,
         project_member_repository=project_member_repository,
+        task_status_repository=task_status_repository,
+        task_type_repository=task_type_repository,
+        task_priority_repository=task_priority_repository,
     )
 
 
