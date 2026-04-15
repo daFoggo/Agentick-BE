@@ -4,6 +4,9 @@ from app.repository.project_repository import ProjectRepository
 from app.repository.project_member_repository import ProjectMemberRepository
 from app.repository.team_member_repository import TeamMemberRepository
 from app.repository.team_repository import TeamRepository
+from app.repository.task_status_repository import TaskStatusRepository
+from app.repository.task_type_repository import TaskTypeRepository
+from app.repository.task_priority_repository import TaskPriorityRepository
 from app.schema.project_schema import ProjectCreate, ProjectFind, ProjectUpdate
 from app.schema.team_member_schema import TeamMemberFind
 from app.services.base_service import BaseService
@@ -16,11 +19,17 @@ class ProjectService(BaseService):
         team_repository: TeamRepository,
         team_member_repository: TeamMemberRepository,
         project_member_repository: ProjectMemberRepository,
+        task_status_repository: TaskStatusRepository,
+        task_type_repository: TaskTypeRepository,
+        task_priority_repository: TaskPriorityRepository,
     ) -> None:
         super().__init__(repository=project_repository)
         self._team_repository = team_repository
         self._team_member_repository = team_member_repository
         self._project_member_repository = project_member_repository
+        self._task_status_repository = task_status_repository
+        self._task_type_repository = task_type_repository
+        self._task_priority_repository = task_priority_repository
 
     def _ensure_user_in_team(self, team_id: str, user_id: str, allow_roles: set[str] | None = None):
         team = self._team_repository.read_by_id(team_id)
@@ -37,6 +46,38 @@ class ProjectService(BaseService):
         if allow_roles and role not in allow_roles:
             raise AuthError(detail="Insufficient privileges for this action.")
 
+    def _seed_project_catalogs(self, project_id: str):
+        """Seed default TaskStatus, TaskType, and TaskPriority for a new project."""
+        # Default Task Statuses
+        statuses = [
+            {"project_id": project_id, "name": "To Do", "color": "#808080", "order": 0, "is_default": True, "is_completed": False},
+            {"project_id": project_id, "name": "In Progress", "color": "#0066CC", "order": 1, "is_default": True, "is_completed": False},
+            {"project_id": project_id, "name": "In Review", "color": "#FF9900", "order": 2, "is_default": True, "is_completed": False},
+            {"project_id": project_id, "name": "Done", "color": "#00CC00", "order": 3, "is_default": True, "is_completed": True},
+        ]
+        for status in statuses:
+            self._task_status_repository.create(status)
+
+        # Default Task Types
+        types = [
+            {"project_id": project_id, "name": "Feature", "color": "#0066CC", "icon": "star", "order": 0, "is_default": True},
+            {"project_id": project_id, "name": "Bug", "color": "#DD0000", "icon": "bug", "order": 1, "is_default": True},
+            {"project_id": project_id, "name": "Improvement", "color": "#FF9900", "icon": "zap", "order": 2, "is_default": True},
+            {"project_id": project_id, "name": "Task", "color": "#6600CC", "icon": "check", "order": 3, "is_default": True},
+        ]
+        for task_type in types:
+            self._task_type_repository.create(task_type)
+
+        # Default Task Priorities
+        priorities = [
+            {"project_id": project_id, "name": "Low", "color": "#00CC00", "level": 0, "order": 0, "is_default": True},
+            {"project_id": project_id, "name": "Medium", "color": "#FFCC00", "level": 1, "order": 1, "is_default": True},
+            {"project_id": project_id, "name": "High", "color": "#FF6600", "level": 2, "order": 2, "is_default": True},
+            {"project_id": project_id, "name": "Urgent", "color": "#DD0000", "level": 3, "order": 3, "is_default": True},
+        ]
+        for priority in priorities:
+            self._task_priority_repository.create(priority)
+
     def create_project(self, schema: ProjectCreate, current_user: User):
         self._ensure_user_in_team(schema.team_id, current_user.id, allow_roles={"owner", "manager"})
         project = self._repository.create(schema)
@@ -47,6 +88,8 @@ class ProjectService(BaseService):
                 "role": "owner",
             }
         )
+        # Seed default catalogs for the new project
+        self._seed_project_catalogs(project.id)
         return project
 
     def get_project_details(self, project_id: str, current_user: User):

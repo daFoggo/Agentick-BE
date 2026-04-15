@@ -7,6 +7,9 @@ from app.repository.team_repository import TeamRepository
 from app.repository.team_member_repository import TeamMemberRepository
 from app.repository.project_repository import ProjectRepository
 from app.repository.project_member_repository import ProjectMemberRepository
+from app.repository.task_status_repository import TaskStatusRepository
+from app.repository.task_type_repository import TaskTypeRepository
+from app.repository.task_priority_repository import TaskPriorityRepository
 from app.schema.base_schema import ResponseSchema
 from app.schema.auth_schema import RefreshTokenRequest, SignIn, SignInResponse, SignUp, TokenResponse, UserInfo
 from app.services.auth_service import AuthService
@@ -25,11 +28,17 @@ def get_auth_service(db=Depends(get_db)) -> AuthService:
     team_service = TeamService(team_repository=team_repository, team_member_repository=team_member_repository)
     project_repository = ProjectRepository(lambda: nullcontext(db))
     project_member_repository = ProjectMemberRepository(lambda: nullcontext(db))
+    task_status_repository = TaskStatusRepository(lambda: nullcontext(db))
+    task_type_repository = TaskTypeRepository(lambda: nullcontext(db))
+    task_priority_repository = TaskPriorityRepository(lambda: nullcontext(db))
     project_service = ProjectService(
         project_repository=project_repository,
         team_repository=team_repository,
         team_member_repository=team_member_repository,
         project_member_repository=project_member_repository,
+        task_status_repository=task_status_repository,
+        task_type_repository=task_type_repository,
+        task_priority_repository=task_priority_repository,
     )
     return AuthService(
         user_repository=user_repository,
