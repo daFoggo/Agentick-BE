@@ -6,16 +6,37 @@ from app.core.dependencies import get_current_active_user, get_db
 from app.core.exceptions import NotFoundError
 from app.model.user import User
 from app.repository.task_repository import TaskRepository
+from app.repository.project_member_repository import ProjectMemberRepository
+from app.repository.calendar_repository import CalendarRepository
+from app.repository.event_repository import EventRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.task_schema import TaskCreate, TaskFind, TaskRead, TaskUpdate
 from app.services.task_service import TaskService
+from app.services.calendar_service import CalendarService
+from app.services.sync_service import TaskCalendarSyncService
 
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["project-tasks"])
 
 
 def get_task_service(db=Depends(get_db)) -> TaskService:
     task_repository = TaskRepository(lambda: nullcontext(db))
-    return TaskService(repository=task_repository)
+    
+    project_member_repository = ProjectMemberRepository(lambda: nullcontext(db))
+    calendar_repository = CalendarRepository(lambda: nullcontext(db))
+    event_repository = EventRepository(lambda: nullcontext(db))
+    
+    calendar_service = CalendarService(
+        calendar_repository=calendar_repository,
+        event_repository=event_repository
+    )
+    
+    sync_service = TaskCalendarSyncService(
+        event_repository=event_repository,
+        project_member_repository=project_member_repository,
+        calendar_service=calendar_service
+    )
+    
+    return TaskService(repository=task_repository, sync_service=sync_service)
 
 
 def _ensure_task_in_project(task: TaskRead, project_id: str):

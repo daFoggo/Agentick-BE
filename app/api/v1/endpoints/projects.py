@@ -15,8 +15,11 @@ from app.repository.task_priority_repository import TaskPriorityRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.project_member_schema import ProjectMemberCreate, ProjectMemberRead, ProjectMemberUpdate
 from app.schema.project_schema import ProjectCreate, ProjectFind, ProjectRead, ProjectUpdate
+from app.schema.task_schema import TaskRead
 from app.services.project_member_service import ProjectMemberService
 from app.services.project_service import ProjectService
+from app.services.task_service import TaskService
+from app.api.v1.endpoints.project_tasks import get_task_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -153,3 +156,13 @@ def remove_project_member(
 ):
     service.remove_member(project_id, user_id, current_user)
     return ResponseSchema(data=True, message="Member removed successfully")
+
+
+@router.get("/{project_id}/gantt", response_model=ResponseSchema[List[TaskRead]])
+def get_project_gantt(
+    project_id: str,
+    current_user: User = Depends(get_current_active_user),
+    task_service: TaskService = Depends(get_task_service),
+):
+    result = task_service.get_gantt_data(project_id)
+    return ResponseSchema(data=result)
