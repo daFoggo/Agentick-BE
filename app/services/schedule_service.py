@@ -32,7 +32,7 @@ class ScheduleService(BaseService):
         })["founds"]
         
         if existing:
-            return self._work_schedule_repo.update_by_id(existing[0].id, schema.model_dump(exclude_unset=True))
+            return self._work_schedule_repo.update(existing[0].id, schema.model_dump(exclude_unset=True))
         else:
             return self._work_schedule_repo.create(schema)
 

@@ -19,7 +19,7 @@ class BaseRepository:
 
     def read_by_options(self, schema: T, eager: bool = False) -> dict:
         with self.session_factory() as session:
-            schema_as_dict: dict = schema.model_dump(exclude_none=True)
+            schema_as_dict: dict = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
             ordering: str = schema_as_dict.get("ordering", settings.ORDERING)
             order_query = (
                 getattr(self.model, ordering[1:]).desc()
