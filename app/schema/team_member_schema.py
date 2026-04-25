@@ -4,10 +4,11 @@ from typing import Optional
 
 from app.schema.base_schema import FindBase, ModelBaseInfo
 from app.schema.user_schema import UserRead
+from app.model.member_role import MemberRole
 
 
 class TeamMemberBase(BaseModel):
-    role: str = Field(..., pattern="^(owner|manager|member|viewer)$")
+    role: MemberRole
 
 
 class TeamMemberCreate(TeamMemberBase):
@@ -15,7 +16,7 @@ class TeamMemberCreate(TeamMemberBase):
 
 
 class TeamMemberUpdate(BaseModel):
-    role: str = Field(..., pattern="^(owner|manager|member|viewer)$")
+    role: MemberRole
 
 
 class TeamMemberRead(ModelBaseInfo, TeamMemberBase):

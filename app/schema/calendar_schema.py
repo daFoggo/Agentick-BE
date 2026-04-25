@@ -1,11 +1,12 @@
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
 from app.schema.base_schema import ModelBaseInfo
+from app.model.calendar import CalendarType
 
 
 class CalendarBase(BaseModel):
     owner_id: str
-    type: str  # personal, team
+    type: CalendarType
     name: Optional[str] = None
     description: Optional[str] = None
 

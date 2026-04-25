@@ -1,7 +1,13 @@
+from enum import Enum
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.model.base_model import BaseModel
+
+
+class CalendarType(str, Enum):
+    PERSONAL = "personal"
+    TEAM = "team"
 
 
 class Calendar(BaseModel):
@@ -10,7 +16,6 @@ class Calendar(BaseModel):
     # owner can be User or Team
     owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     
-    # personal, team
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)

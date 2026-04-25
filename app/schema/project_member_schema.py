@@ -5,10 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schema.base_schema import FindBase, ModelBaseInfo
 from app.schema.user_schema import UserRead
+from app.model.member_role import MemberRole
 
 
 class ProjectMemberBase(BaseModel):
-    role: str = Field(..., pattern="^(owner|manager|member|viewer)$")
+    role: MemberRole
 
 
 class ProjectMemberCreate(ProjectMemberBase):
@@ -16,7 +17,7 @@ class ProjectMemberCreate(ProjectMemberBase):
 
 
 class ProjectMemberUpdate(BaseModel):
-    role: str = Field(..., pattern="^(owner|manager|member|viewer)$")
+    role: MemberRole
 
 
 class ProjectMemberRead(ModelBaseInfo, ProjectMemberBase):
