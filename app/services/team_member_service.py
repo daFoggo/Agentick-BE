@@ -5,6 +5,7 @@ from app.schema.team_member_schema import TeamMemberCreate, TeamMemberUpdate, Te
 from app.services.base_service import BaseService
 from app.model.user import User
 from app.core.exceptions import AuthError, NotFoundError, DuplicatedError
+from app.core.security import create_invite_token, decode_jwt
 
 
 class TeamMemberService(BaseService):
@@ -50,6 +51,53 @@ class TeamMemberService(BaseService):
             )
         return self._repository.read_by_options(find_query)
 
+    def generate_invite_token(self, team_id: str, email: str, role: str, current_user: User) -> str:
+        # Check team exists
+        team = self._team_repository.read_by_id(team_id)
+        if not team or team.is_deleted:
+            raise NotFoundError(detail="Team not found.")
+
+        # Check permission (OWNER or MANAGER)
+        current_member = self._repository.read_by_options(TeamMemberFind(team_id__eq=team_id, user_id__eq=current_user.id))
+        if not current_member.get("founds") or current_member["founds"][0].role not in ["owner", "manager"]:
+            raise AuthError(detail="Insufficient privileges to generate invites.")
+
+        subject = {
+            "team_id": team_id,
+            "email": email,
+            "role": role,
+            "invite_type": "team",
+        }
+        token, _ = create_invite_token(subject)
+        return token
+
+    def accept_invite_token(self, token: str, current_user: User):
+        decoded = decode_jwt(token)
+        if not decoded or decoded.get("type") != "invite" or decoded.get("invite_type") != "team":
+            raise AuthError(detail="Invalid or expired invitation token.")
+
+        if decoded.get("email") != current_user.email:
+            raise AuthError(detail="This invitation was sent to a different email address.")
+
+        team_id = decoded.get("team_id")
+        role = decoded.get("role")
+
+        team = self._team_repository.read_by_id(team_id)
+        if not team or team.is_deleted:
+            raise NotFoundError(detail="Team no longer exists.")
+
+        # Check if already a member
+        existing_member = self._repository.read_by_options(TeamMemberFind(team_id__eq=team_id, user_id__eq=current_user.id))
+        if existing_member.get("founds"):
+            raise DuplicatedError(detail="You are already a member of this team.")
+
+        member_data = {
+            "team_id": team_id,
+            "user_id": current_user.id,
+            "role": role,
+        }
+        return self._repository.create(member_data)
+
     def get_member_project_count(self, team_id: str, user_id: str) -> int:
         return self._project_member_repository.count_projects_in_team(team_id, user_id)
 
@@ -88,5 +136,23 @@ class TeamMemberService(BaseService):
         # Cascading removal from all projects in the team
         self._project_member_repository.remove_from_all_team_projects(team_id, user_id)
 
-        # Remove from the team itself
+    # Remove from the team itself
         return self._repository.delete_by_id(target_member["founds"][0].id)
+
+    def check_permission(self, team_id: str, user_id: str, required_role: str = "manager"):
+        """Checks if a user has sufficient role in a team."""
+        member_result = self._repository.read_by_options(TeamMemberFind(team_id__eq=team_id, user_id__eq=user_id))
+        members = member_result.get("founds", [])
+        
+        if not members:
+            raise AuthError(detail="You are not a member of this team.")
+            
+        current_role = members[0].role
+        
+        # Role hierarchy: owner > manager > member
+        role_levels = {"owner": 3, "manager": 2, "member": 1}
+        
+        if role_levels.get(current_role, 0) < role_levels.get(required_role, 0):
+            raise AuthError(detail=f"Insufficient privileges. Required role: {required_role}")
+        
+        return True

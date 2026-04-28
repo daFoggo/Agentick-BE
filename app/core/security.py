@@ -54,6 +54,21 @@ def create_refresh_token(subject: dict[str, Any], expires_delta: timedelta | Non
     return encoded_jwt, expiration_datetime
 
 
+def create_invite_token(subject: dict[str, Any], expires_delta: timedelta | None = None) -> tuple[str, str]:
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(days=7))
+    payload = {
+        **subject,
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
+        "type": "invite",
+    }
+    encoded_jwt = jwt.encode(payload, _get_secret_key(), algorithm=ALGORITHM)
+    expiration_datetime = expire.isoformat()
+    return encoded_jwt, expiration_datetime
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_hash.verify(plain_password, hashed_password)
 

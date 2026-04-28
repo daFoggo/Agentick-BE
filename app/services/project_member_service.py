@@ -1,4 +1,5 @@
 from app.core.exceptions import AuthError, DuplicatedError, NotFoundError
+from app.core.security import create_invite_token, decode_jwt
 from app.model.user import User
 from app.repository.project_member_repository import ProjectMemberRepository
 from app.repository.project_repository import ProjectRepository
@@ -68,6 +69,57 @@ class ProjectMemberService(BaseService):
 
         return self._repository.read_by_options(ProjectMemberFind(project_id__eq=project_id), eager=True)
 
+    def generate_invite_token(self, project_id: str, email: str, role: str, current_user: User) -> str:
+        project = self._get_project_or_raise(project_id)
+        self._ensure_team_manager(project.team_id, current_user.id)
+
+        subject = {
+            "project_id": project_id,
+            "email": email,
+            "role": role,
+            "invite_type": "project",
+        }
+        token, _ = create_invite_token(subject)
+        return token
+
+    def accept_invite_token(self, token: str, current_user: User):
+        decoded = decode_jwt(token)
+        if not decoded or decoded.get("type") != "invite" or decoded.get("invite_type") != "project":
+            raise AuthError(detail="Invalid or expired invitation token.")
+
+        if decoded.get("email") != current_user.email:
+            raise AuthError(detail="This invitation was sent to a different email address.")
+
+        project_id = decoded.get("project_id")
+        role = decoded.get("role")
+
+        project = self._get_project_or_raise(project_id)
+
+        # Ensure user is in the team first before joining project
+        target_team_member = self._team_member_repository.read_by_options(
+            TeamMemberFind(team_id__eq=project.team_id, user_id__eq=current_user.id)
+        )
+        if not target_team_member.get("founds"):
+            # Auto-join team as member
+            self._team_member_repository.create({
+                "team_id": project.team_id,
+                "user_id": current_user.id,
+                "role": "member",
+            })
+
+        existing_member = self._repository.read_by_options(
+            ProjectMemberFind(project_id__eq=project_id, user_id__eq=current_user.id)
+        )
+        if existing_member.get("founds"):
+            raise DuplicatedError(detail="You are already a member of this project.")
+
+        member_data = {
+            "project_id": project_id,
+            "user_id": current_user.id,
+            "role": role,
+        }
+        return self._repository.create(member_data)
+
     def update_member_role(self, project_id: str, user_id: str, schema: ProjectMemberUpdate, current_user: User):
         project = self._get_project_or_raise(project_id)
         self._ensure_team_manager(project.team_id, current_user.id)
@@ -98,3 +150,9 @@ class ProjectMemberService(BaseService):
                 raise AuthError(detail="Cannot remove the only owner of the project.")
 
         return self._repository.delete_by_id(target_member["founds"][0].id)
+
+    def check_permission(self, project_id: str, user_id: str, required_role: str = "manager"):
+        """Checks if a user has sufficient role in the project's team."""
+        project = self._get_project_or_raise(project_id)
+        # For now, project management permission is tied to team role
+        return self._ensure_team_manager(project.team_id, user_id)

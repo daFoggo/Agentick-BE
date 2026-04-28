@@ -52,6 +52,15 @@ class Settings(BaseSettings):
 
     DATABASE_URI_FORMAT: str = "{db_engine}://{user}:{password}@{host}:{port}/{database}"
 
+    # Email / SMTP configuration
+    SMTP_HOST: str | None = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    EMAILS_FROM_NAME: str = "Agentick"
+
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # find query
     PAGE: int = 1
     PAGE_SIZE: int = 20
