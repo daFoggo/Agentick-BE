@@ -27,23 +27,23 @@ class InvitationService:
         self.project_member_repository = project_member_repository
 
     def get_my_pending_invitations(self, current_user: User) -> list[Invitation]:
-        return self.invitation_repository.get_pending_by_email(current_user.email)
+        return self.invitation_repository.get_pending_by_email(current_user.email, eager=True)
 
     def get_invitation_by_id(self, invitation_id: str) -> Invitation:
-        invitation = self.invitation_repository.read_by_id(invitation_id)
+        invitation = self.invitation_repository.read_by_id(invitation_id, eager=True)
         if not invitation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
         return invitation
 
     def accept_invitation(self, invitation_id: str, current_user: User) -> Invitation:
-        invitation = self.invitation_repository.read_by_id(invitation_id)
+        invitation = self.invitation_repository.read_by_id(invitation_id, eager=True)
         if not invitation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
         if invitation.status != InvitationStatus.PENDING:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation is no longer valid")
 
-        if invitation.email.lower() != current_user.email.lower():
+        if invitation.email.strip().lower() != current_user.email.strip().lower():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not allowed to accept this invitation")
 
         # Process the acceptance
@@ -90,27 +90,27 @@ class InvitationService:
                     })
 
         # Update status
-        updated_invitation = self.invitation_repository.update(invitation_id, {"status": InvitationStatus.ACCEPTED})
+        updated_invitation = self.invitation_repository.update(invitation_id, {"status": InvitationStatus.ACCEPTED}, eager=True)
         return updated_invitation
 
     def decline_invitation(self, invitation_id: str, current_user: User) -> Invitation:
-        invitation = self.invitation_repository.read_by_id(invitation_id)
+        invitation = self.invitation_repository.read_by_id(invitation_id, eager=True)
         if not invitation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
         if invitation.status != InvitationStatus.PENDING:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation is no longer valid")
 
-        if invitation.email.lower() != current_user.email.lower():
+        if invitation.email.strip().lower() != current_user.email.strip().lower():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not allowed to decline this invitation")
 
-        updated_invitation = self.invitation_repository.update(invitation_id, {"status": InvitationStatus.DECLINED})
+        updated_invitation = self.invitation_repository.update(invitation_id, {"status": InvitationStatus.DECLINED}, eager=True)
         return updated_invitation
 
     def create_and_send_invitation(self, email: str, inviter: User, role: str, team_id: str = None, project_id: str = None, target_name: str = None) -> Invitation:
         # Create invitation record
         invitation_data = {
-            "email": email,
+            "email": email.strip(),
             "inviter_id": inviter.id,
             "team_id": team_id,
             "project_id": project_id,

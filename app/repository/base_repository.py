@@ -76,28 +76,28 @@ class BaseRepository:
                 raise DuplicatedError(detail=str(e.orig))
             return query
 
-    def update(self, id: str, schema: T | dict, auto_commit: bool = True):
+    def update(self, id: str, schema: T | dict, auto_commit: bool = True, eager: bool = False):
         data = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update(data)
             if auto_commit:
                 session.commit()
-            return self.read_by_id(id)
+            return self.read_by_id(id, eager=eager)
 
-    def update_attr(self, id: str, column: str, value: Any, auto_commit: bool = True):
+    def update_attr(self, id: str, column: str, value: Any, auto_commit: bool = True, eager: bool = False):
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update({column: value})
             if auto_commit:
                 session.commit()
-            return self.read_by_id(id)
+            return self.read_by_id(id, eager=eager)
 
-    def whole_update(self, id: str, schema: T | dict, auto_commit: bool = True):
+    def whole_update(self, id: str, schema: T | dict, auto_commit: bool = True, eager: bool = False):
         data = schema.model_dump() if hasattr(schema, "model_dump") else schema
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update(data)
             if auto_commit:
                 session.commit()
-            return self.read_by_id(id)
+            return self.read_by_id(id, eager=eager)
 
     def delete_by_id(self, id: str, auto_commit: bool = True):
         with self.session_factory() as session:
