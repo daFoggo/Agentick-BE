@@ -22,12 +22,12 @@ class TaskCalendarSyncService(BaseService):
         self._project_member_repo = project_member_repository
         self._calendar_service = calendar_service
 
-    def sync_task_block(self, task: Task):
+    def sync_task_event(self, task: Task):
         """
-        Syncs a task to a 'task_block' event on the assignee's personal calendar.
+        Syncs a task to a 'task' event on the assignee's personal calendar.
         """
         # 1. Clear existing event for this task
-        self._calendar_service.delete_task_block_event(task.id)
+        self._calendar_service.delete_task_event(task.id)
 
         # 2. If no assignee, no dates, or task is inactive, we are done
         if (
@@ -61,7 +61,7 @@ class TaskCalendarSyncService(BaseService):
             calendar_id=calendar.id,
             user_id=user_id,
             team_id=team_id,
-            type="task_block",
+            type="task",
             title=task.title,
             description=task.description,
             start_time=start_time,

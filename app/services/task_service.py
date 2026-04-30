@@ -11,18 +11,18 @@ class TaskService(BaseService):
     def add(self, schema: Any) -> Any:
         task = super().add(schema)
         # Sync to calendar
-        self._sync_service.sync_task_block(task)
+        self._sync_service.sync_task_event(task)
         return task
 
     def patch(self, id: str, schema: Any) -> Any:
         task = super().patch(id, schema)
         # Sync to calendar
-        self._sync_service.sync_task_block(task)
+        self._sync_service.sync_task_event(task)
         return task
 
     def patch_attr(self, id: str, attr: str, value: Any) -> Any:
         task = super().patch_attr(id, attr, value)
-        self._sync_service.sync_task_block(task)
+        self._sync_service.sync_task_event(task)
         return task
 
     def get_gantt_data(self, project_id: str):

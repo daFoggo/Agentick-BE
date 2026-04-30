@@ -7,7 +7,7 @@ from app.model.base_model import BaseModel
 
 
 class EventType(str, Enum):
-    TASK_BLOCK = "task_block"
+    TASK = "task"
     MEETING = "meeting"
     FOCUS_TIME = "focus_time"
     LEAVE = "leave"

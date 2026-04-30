@@ -60,7 +60,7 @@ class CalendarService(BaseService):
     def delete_event(self, event_id: str):
         return self._event_repo.delete_by_id(event_id)
 
-    def delete_task_block_event(self, task_id: str):
+    def delete_task_event(self, task_id: str):
         events = self._event_repo.read_by_options({"task_id__eq": task_id})["founds"]
         for event in events:
             self._event_repo.delete_by_id(event.id)
