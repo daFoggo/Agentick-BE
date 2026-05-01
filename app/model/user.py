@@ -16,3 +16,4 @@ class User(BaseModel):
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     owned_teams: Mapped[list["Team"]] = relationship("Team", back_populates="owner")
+    notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="user", cascade="all, delete-orphan")

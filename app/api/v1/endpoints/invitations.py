@@ -13,14 +13,24 @@ from app.services.invitation_service import InvitationService
 
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 
+from app.repository.user_repository import UserRepository
+from app.repository.notification_repository import NotificationRepository
+from app.services.notification_service import NotificationService
+
 def get_invitation_service(db=Depends(get_db)) -> InvitationService:
     invitation_repository = InvitationRepository(lambda: nullcontext(db))
     team_member_repository = TeamMemberRepository(lambda: nullcontext(db))
     project_member_repository = ProjectMemberRepository(lambda: nullcontext(db))
+    user_repository = UserRepository(lambda: nullcontext(db))
+    notification_repository = NotificationRepository(lambda: nullcontext(db))
+    notification_service = NotificationService(notification_repository)
+    
     return InvitationService(
         invitation_repository=invitation_repository,
         team_member_repository=team_member_repository,
         project_member_repository=project_member_repository,
+        user_repository=user_repository,
+        notification_service=notification_service
     )
 
 @router.get("/me", response_model=ResponseSchema[List[InvitationResponse]])

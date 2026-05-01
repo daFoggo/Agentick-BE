@@ -21,10 +21,14 @@ class InvitationService:
         invitation_repository: InvitationRepository,
         team_member_repository: TeamMemberRepository,
         project_member_repository: ProjectMemberRepository,
+        user_repository: "UserRepository" = None,
+        notification_service: "NotificationService" = None,
     ):
         self.invitation_repository = invitation_repository
         self.team_member_repository = team_member_repository
         self.project_member_repository = project_member_repository
+        self.user_repository = user_repository
+        self.notification_service = notification_service
 
     def get_my_pending_invitations(self, current_user: User) -> list[Invitation]:
         return self.invitation_repository.get_pending_by_email(current_user.email, eager=True)
@@ -121,6 +125,20 @@ class InvitationService:
 
         # Send email in background thread
         target_type = "project" if project_id else "team"
+
+        # Create notification if user already exists
+        if self.user_repository and self.notification_service:
+            target_user = self.user_repository.read_by_email(email)
+            if target_user:
+                self.notification_service.create_notification(
+                    user_id=target_user.id,
+                    title=f"New Invitation to join {target_name}",
+                    content=f"{inviter.name} invited you to join the {target_type} '{target_name}'.",
+                    type="INVITATION",
+                    resource_id=created_invitation.id,
+                    resource_type="invitation"
+                )
+
         invite_link = f"{configs.FRONTEND_URL}/invite/accept?id={created_invitation.id}"
 
         threading.Thread(

@@ -10,6 +10,7 @@ from app.model.task_type import TaskType
 from app.model.task_priority import TaskPriority
 from app.model.task import Task
 from app.model.invitation import Invitation
+from app.model.notification import Notification
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "TaskPriority",
     "Task",
     "Invitation",
+    "Notification",
 ]
