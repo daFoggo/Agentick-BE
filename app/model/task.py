@@ -13,6 +13,14 @@ task_tag = Table(
 )
 
 
+task_assignee = Table(
+    "task_assignee",
+    BaseModel.metadata,
+    Column("task_id", String(36), ForeignKey("task.id", ondelete="CASCADE"), primary_key=True),
+    Column("project_member_id", String(36), ForeignKey("project_member.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class Task(BaseModel):
     __tablename__ = "task"
 
@@ -27,7 +35,6 @@ class Task(BaseModel):
     priority_id: Mapped[str] = mapped_column(String(36), ForeignKey("task_priority.id"), nullable=False)
     
     assigner_id: Mapped[str] = mapped_column(String(36), ForeignKey("project_member.id"), nullable=False)
-    assignee_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("project_member.id"), nullable=True)
     
     phase_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("phase.id"), nullable=True)
     
@@ -44,10 +51,15 @@ class Task(BaseModel):
     type: Mapped["TaskType"] = relationship("TaskType")
     priority: Mapped["TaskPriority"] = relationship("TaskPriority")
     assigner: Mapped["ProjectMember"] = relationship("ProjectMember", foreign_keys=[assigner_id])
-    assignee: Mapped["ProjectMember | None"] = relationship("ProjectMember", foreign_keys=[assignee_id])
+    assignees: Mapped[list["ProjectMember"]] = relationship("ProjectMember", secondary=task_assignee)
+    
+    @property
+    def assignee_ids(self) -> list[str]:
+        return [a.id for a in self.assignees]
+
     phase: Mapped["Phase"] = relationship("Phase", back_populates="tasks")
     tags: Mapped[list["Tag"]] = relationship("Tag", secondary=task_tag, back_populates="tasks")
     parent: Mapped["Task | None"] = relationship("Task", back_populates="sub_tasks", remote_side="Task.id")
     sub_tasks: Mapped[list["Task"]] = relationship("Task", back_populates="parent")
 
-    eagers = ["status", "type", "priority", "assignee", "tags"]
+    eagers = ["status", "type", "priority", "assignees", "tags"]

@@ -48,8 +48,6 @@ class CalendarService(BaseService):
         )
         return self._calendar_repo.create(schema)
 
-    def get_events(self, calendar_id: str):
-        return self._event_repo.read_by_options({"calendar_id__eq": calendar_id})["founds"]
 
     def create_event(self, schema: EventCreate):
         return self._event_repo.create(schema)
