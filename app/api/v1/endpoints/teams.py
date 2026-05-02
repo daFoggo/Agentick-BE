@@ -3,15 +3,27 @@ from typing import List
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_db, get_current_active_user
+from app.core.exceptions import DuplicatedError
 from app.model.user import User
 from app.repository.team_repository import TeamRepository
 from app.repository.team_member_repository import TeamMemberRepository
 from app.repository.project_member_repository import ProjectMemberRepository
 from app.schema.base_schema import ResponseSchema, FindResult
 from app.schema.team_schema import TeamCreate, TeamRead, TeamUpdate, TeamFind
-from app.schema.team_member_schema import TeamMemberCreate, TeamMemberRead, TeamMemberUpdate, TeamMemberFind, TeamMemberProjectCount
+from app.schema.team_member_schema import (
+    TeamMemberCreate,
+    TeamMemberRead,
+    TeamMemberUpdate,
+    TeamMemberFind,
+    TeamMemberProjectCount,
+    TeamInviteGenerateRequest,
+    TeamInviteTokenResponse,
+    TeamInviteAcceptRequest,
+)
 from app.services.team_service import TeamService
 from app.services.team_member_service import TeamMemberService
+from app.services.invitation_service import InvitationService
+from app.api.v1.endpoints.invitations import get_invitation_service
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
@@ -148,3 +160,44 @@ def remove_team_member(
 ):
     service.remove_member(team_id, user_id, current_user)
     return ResponseSchema(data=True, message="Member removed successfully")
+
+
+@router.post("/{team_id}/invitations/generate", response_model=ResponseSchema[TeamInviteTokenResponse])
+def generate_team_invitation(
+    team_id: str,
+    schema: TeamInviteGenerateRequest,
+    current_user: User = Depends(get_current_active_user),
+    team_service: TeamService = Depends(get_team_service),
+    team_member_service: TeamMemberService = Depends(get_team_member_service),
+    invitation_service: InvitationService = Depends(get_invitation_service)
+):
+    # Verify permission
+    team_member_service.check_permission(team_id, current_user.id, "manager")
+    
+    # Get team details for email
+    team = team_service.get_team_details(team_id)
+    
+    # Check if user with this email is already a member
+    target_user = invitation_service.user_repository.read_by_email(schema.email)
+    if target_user and team_member_service.is_user_member(team_id, target_user.id):
+        raise DuplicatedError(detail=f"User with email {schema.email} is already a member of this team.")
+
+    invitation = invitation_service.create_and_send_invitation(
+        email=schema.email,
+        inviter=current_user,
+        role=schema.role,
+        team_id=team_id,
+        target_name=team.name
+    )
+    # Return fake token just to not break existing FE types temporarily. We will remove this later if needed.
+    return ResponseSchema(data=TeamInviteTokenResponse(token=invitation.id), message="Invitation sent successfully")
+
+
+@router.post("/invitations/accept", response_model=ResponseSchema[TeamMemberRead])
+def accept_team_invitation(
+    schema: TeamInviteAcceptRequest,
+    current_user: User = Depends(get_current_active_user),
+    service: TeamMemberService = Depends(get_team_member_service)
+):
+    result = service.accept_invite_token(schema.token, current_user)
+    return ResponseSchema(data=result, message="Successfully joined the team")

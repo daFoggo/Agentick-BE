@@ -8,6 +8,7 @@ from app.repository.task_status_repository import TaskStatusRepository
 from app.repository.task_type_repository import TaskTypeRepository
 from app.repository.task_priority_repository import TaskPriorityRepository
 from app.schema.project_schema import ProjectCreate, ProjectFind, ProjectUpdate
+from app.schema.project_member_schema import ProjectMemberFind
 from app.schema.team_member_schema import TeamMemberFind
 from app.services.base_service import BaseService
 
@@ -117,7 +118,13 @@ class ProjectService(BaseService):
         if not project or project.is_deleted:
             raise NotFoundError(detail="Project not found.")
 
-        self._ensure_user_in_team(project.team_id, current_user.id)
+        # Check if user is a member of this PROJECT
+        member = self._project_member_repository.read_by_options(
+            ProjectMemberFind(project_id__eq=project_id, user_id__eq=current_user.id)
+        )
+        if not member.get("founds"):
+            raise AuthError(detail="You are not a member of this project.")
+            
         return project
 
     def update_project(self, project_id: str, schema: ProjectUpdate, current_user: User):
@@ -134,6 +141,18 @@ class ProjectService(BaseService):
         return self._repository.get_my_projects(user_id)
 
     def get_projects(self, find_query: ProjectFind, current_user: User):
-        if find_query.team_id__eq:
-            self._ensure_user_in_team(find_query.team_id__eq, current_user.id)
-        return self._repository.read_by_options(find_query)
+        # Always filter projects by user membership
+        # This overrides the repository's default search to ensure privacy
+        projects = self._repository.get_my_projects(
+            current_user.id, 
+            team_id=find_query.team_id__eq
+        )
+        return {
+            "founds": projects,
+            "search_options": {
+                "total_count": len(projects),
+                "page": find_query.page or 1,
+                "page_size": find_query.page_size or len(projects),
+                "ordering": find_query.ordering
+            }
+        }

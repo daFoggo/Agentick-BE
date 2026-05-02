@@ -37,3 +37,16 @@ class TeamMemberFind(FindBase):
 
 class TeamMemberProjectCount(BaseModel):
     count: int
+
+
+class TeamInviteGenerateRequest(BaseModel):
+    email: str
+    role: str = Field(..., pattern="^(owner|manager|member|viewer)$")
+
+
+class TeamInviteTokenResponse(BaseModel):
+    token: str
+
+
+class TeamInviteAcceptRequest(BaseModel):
+    token: str

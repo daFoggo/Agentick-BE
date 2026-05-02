@@ -33,3 +33,16 @@ class ProjectMemberFind(FindBase):
     project_id__eq: Optional[str] = None
     user_id__eq: Optional[str] = None
     role__eq: Optional[str] = None
+
+
+class ProjectInviteGenerateRequest(BaseModel):
+    email: str
+    role: str = Field(..., pattern="^(owner|manager|member|viewer)$")
+
+
+class ProjectInviteTokenResponse(BaseModel):
+    token: str
+
+
+class ProjectInviteAcceptRequest(BaseModel):
+    token: str
