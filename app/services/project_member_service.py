@@ -156,3 +156,10 @@ class ProjectMemberService(BaseService):
         project = self._get_project_or_raise(project_id)
         # For now, project management permission is tied to team role
         return self._ensure_team_manager(project.team_id, user_id)
+
+    def is_user_member(self, project_id: str, user_id: str) -> bool:
+        """Checks if a user is a member of the project."""
+        member = self._repository.read_by_options(
+            ProjectMemberFind(project_id__eq=project_id, user_id__eq=user_id)
+        )
+        return bool(member.get("founds"))

@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_db, get_current_active_user
+from app.core.exceptions import DuplicatedError
 from app.model.user import User
 from app.repository.team_repository import TeamRepository
 from app.repository.team_member_repository import TeamMemberRepository
@@ -176,6 +177,11 @@ def generate_team_invitation(
     # Get team details for email
     team = team_service.get_team_details(team_id)
     
+    # Check if user with this email is already a member
+    target_user = invitation_service.user_repository.read_by_email(schema.email)
+    if target_user and team_member_service.is_user_member(team_id, target_user.id):
+        raise DuplicatedError(detail=f"User with email {schema.email} is already a member of this team.")
+
     invitation = invitation_service.create_and_send_invitation(
         email=schema.email,
         inviter=current_user,

@@ -22,8 +22,10 @@ class NotificationService:
             from fastapi import HTTPException
             raise HTTPException(status_code=403, detail="Forbidden")
         
-        # Nhấn Bookmark là đảo trạng thái đã đọc/chưa đọc (để chuyển qua lại giữa 2 bảng)
-        return self.notification_repository.update_attr(notification_id, "is_read", not notification.is_read)
+        # Nếu đang là BOOKMARKED thì bỏ bookmark (chuyển sang ARCHIVED - đã đọc)
+        # Nếu không thì chuyển sang BOOKMARKED (đã đọc nhưng lưu lại)
+        new_status = NotificationStatus.ARCHIVED if notification.status == NotificationStatus.BOOKMARKED else NotificationStatus.BOOKMARKED
+        return self.notification_repository.update_attr(notification_id, "status", new_status)
 
     def get_stats(self, user_id: str):
         return self.notification_repository.get_stats(user_id)
@@ -34,7 +36,8 @@ class NotificationService:
             from fastapi import HTTPException
             raise HTTPException(status_code=403, detail="Forbidden")
         
-        return self.notification_repository.update_attr(notification_id, "is_read", True)
+        # Đánh dấu đã đọc = chuyển sang ARCHIVED
+        return self.notification_repository.update_attr(notification_id, "status", NotificationStatus.ARCHIVED)
 
     def archive_notification(self, notification_id: str, user_id: str):
         notification = self.notification_repository.read_by_id(notification_id)
@@ -50,7 +53,7 @@ class NotificationService:
             from fastapi import HTTPException
             raise HTTPException(status_code=403, detail="Forbidden")
         
-        # Trả về trạng thái ACTIVE nhưng giữ nguyên is_read để tin nhắn quay về đúng tab cũ
+        # Trả về trạng thái ACTIVE (chưa đọc)
         return self.notification_repository.update_attr(notification_id, "status", NotificationStatus.ACTIVE)
 
     def delete_notification(self, notification_id: str, user_id: str):

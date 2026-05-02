@@ -16,6 +16,7 @@ class NotificationType(str, enum.Enum):
 class NotificationStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
+    BOOKMARKED = "BOOKMARKED"
     DELETED = "DELETED"
 
 class Notification(BaseModel):

@@ -4,6 +4,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_current_active_user, get_db
+from app.core.exceptions import DuplicatedError
 from app.model.user import User
 from app.repository.project_member_repository import ProjectMemberRepository
 from app.repository.project_repository import ProjectRepository
@@ -177,6 +178,11 @@ def generate_project_invitation(
     
     project = project_service.get_project_details(project_id, current_user)
     
+    # Check if user with this email is already a member
+    target_user = invitation_service.user_repository.read_by_email(schema.email)
+    if target_user and project_member_service.is_user_member(project_id, target_user.id):
+        raise DuplicatedError(detail=f"User with email {schema.email} is already a member of this project.")
+
     invitation = invitation_service.create_and_send_invitation(
         email=schema.email,
         inviter=current_user,

@@ -156,3 +156,10 @@ class TeamMemberService(BaseService):
             raise AuthError(detail=f"Insufficient privileges. Required role: {required_role}")
         
         return True
+
+    def is_user_member(self, team_id: str, user_id: str) -> bool:
+        """Checks if a user is a member of the team."""
+        member = self._repository.read_by_options(
+            TeamMemberFind(team_id__eq=team_id, user_id__eq=user_id)
+        )
+        return bool(member.get("founds"))

@@ -12,35 +12,32 @@ class NotificationRepository(BaseRepository):
         with self.session_factory() as session:
             return session.query(Notification).filter(
                 Notification.user_id == user_id,
-                Notification.is_read == False,
                 Notification.status == NotificationStatus.ACTIVE
             ).count()
 
     def get_stats(self, user_id: str) -> dict:
         with self.session_factory() as session:
-            # Inbox = Active + Unread
-            unread_count = session.query(Notification).filter(
+            # Active (Unread)
+            active_count = session.query(Notification).filter(
                 Notification.user_id == user_id,
-                Notification.is_read == False,
                 Notification.status == NotificationStatus.ACTIVE
             ).count()
             
-            # Bookmarks = Active + Read (Hệ thống To-do)
+            # Bookmarks (Read but saved)
             bookmarks_count = session.query(Notification).filter(
                 Notification.user_id == user_id,
-                Notification.is_read == True,
-                Notification.status == NotificationStatus.ACTIVE
+                Notification.status == NotificationStatus.BOOKMARKED
             ).count()
             
-            # Archive = Archived (Bất kể read/unread)
+            # Archive (Read)
             archive_count = session.query(Notification).filter(
                 Notification.user_id == user_id,
                 Notification.status == NotificationStatus.ARCHIVED
             ).count()
 
             return {
-                "active_count": unread_count, # Đổi tên hiển thị cho thống nhất
-                "unread_count": unread_count,
+                "active_count": active_count,
+                "unread_count": active_count,
                 "bookmarks_count": bookmarks_count,
                 "archive_count": archive_count
             }
