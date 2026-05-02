@@ -23,10 +23,13 @@ from app.schema.project_member_schema import (
     ProjectInviteAcceptRequest,
 )
 from app.schema.project_schema import ProjectCreate, ProjectFind, ProjectRead, ProjectUpdate
+from app.schema.task_schema import TaskRead
 from app.services.project_member_service import ProjectMemberService
 from app.services.project_service import ProjectService
 from app.services.invitation_service import InvitationService
 from app.api.v1.endpoints.invitations import get_invitation_service
+from app.services.task_service import TaskService
+from app.api.v1.endpoints.project_tasks import get_task_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -202,3 +205,13 @@ def accept_project_invitation(
 ):
     result = service.accept_invite_token(schema.token, current_user)
     return ResponseSchema(data=result, message="Successfully joined the project")
+
+
+@router.get("/{project_id}/gantt", response_model=ResponseSchema[List[TaskRead]])
+def get_project_gantt(
+    project_id: str,
+    current_user: User = Depends(get_current_active_user),
+    task_service: TaskService = Depends(get_task_service),
+):
+    result = task_service.get_gantt_data(project_id)
+    return ResponseSchema(data=result)

@@ -24,6 +24,8 @@ from app.schema.project_schema import ProjectCreate
 from app.services.user_service import UserService
 from app.services.team_service import TeamService
 from app.services.project_service import ProjectService
+from app.services.calendar_service import CalendarService
+from app.services.schedule_service import ScheduleService
 
 
 class AuthService:
@@ -33,11 +35,15 @@ class AuthService:
         user_service: UserService,
         team_service: TeamService,
         project_service: ProjectService,
+        calendar_service: CalendarService,
+        schedule_service: ScheduleService,
     ) -> None:
         self._user_repository = user_repository
         self._user_service = user_service
         self._team_service = team_service
         self._project_service = project_service
+        self._calendar_service = calendar_service
+        self._schedule_service = schedule_service
 
     def sign_up(self, schema: SignUp) -> UserInfo:
         existing_user = self._user_repository.read_by_email(str(schema.email))
@@ -70,6 +76,13 @@ class AuthService:
                 description=f"Default project for {user.name}",
             )
             self._project_service.create_project(project_create, user)
+
+            # Create personal and team calendars
+            self._calendar_service.get_or_create_personal_calendar(user.id, user.name)
+            self._calendar_service.get_or_create_team_calendar(team.id, team.name)
+
+            # Create default personal schedule for the user
+            self._schedule_service.create_default_user_schedule(user.id)
 
             # Manual commit for the entire transaction
             self._user_repository.commit()
