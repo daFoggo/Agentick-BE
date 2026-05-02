@@ -13,7 +13,7 @@ class TaskBase(BaseModel):
     type_id: str
     priority_id: str
     assigner_id: str
-    assignee_id: Optional[str] = None
+    assignee_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
     start_date: datetime
     due_date: datetime
@@ -31,7 +31,7 @@ class TaskCreate(BaseModel):
     type_id: str
     priority_id: str
     assigner_id: str
-    assignee_id: Optional[str] = None
+    assignee_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
     start_date: datetime
     due_date: datetime
@@ -45,13 +45,15 @@ class TaskUpdate(BaseModel):
     type_id: Optional[str] = None
     priority_id: Optional[str] = None
     assigner_id: Optional[str] = None
-    assignee_id: Optional[str] = None
+    assignee_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     order: Optional[float] = Field(None, ge=0)
     is_archived: Optional[bool] = None
 
+
+from app.schema.project_member_schema import ProjectMemberRead
 
 class TaskRead(ModelBaseInfo):
     project_id: str
@@ -62,13 +64,14 @@ class TaskRead(ModelBaseInfo):
     type_id: str
     priority_id: str
     assigner_id: str
-    assignee_id: Optional[str] = None
+    assignee_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
-    start_date: datetime
-    due_date: datetime
+    start_date: Optional[datetime] = None
+    due_date: Optional[datetime] = None
     order: float
     is_archived: bool
     is_deleted: bool
+    assignees: Optional[List[ProjectMemberRead]] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -76,8 +79,10 @@ class TaskRead(ModelBaseInfo):
 class TaskFind(FindBase):
     id__eq: Optional[str] = None
     project_id__eq: Optional[str] = None
+    team_id__eq: Optional[str] = None
     title__ilike: Optional[str] = None
     status_id__eq: Optional[str] = None
-    assignee_id__eq: Optional[str] = None
+    # Filter by any of the assignees containing this ID
+    assignee_ids__contains: Optional[str] = None
     is_archived__eq: Optional[bool] = None
     is_deleted__eq: Optional[bool] = False

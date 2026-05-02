@@ -9,6 +9,9 @@ from app.repository.task_priority_repository import TaskPriorityRepository
 from app.repository.phase_repository import PhaseRepository
 from app.repository.tag_repository import TagRepository
 from app.repository.task_repository import TaskRepository
+from app.repository.work_schedule_repository import WorkScheduleRepository
+from app.repository.calendar_repository import CalendarRepository
+from app.repository.event_repository import EventRepository
 
 __all__ = [
     "UserRepository",
@@ -22,4 +25,7 @@ __all__ = [
     "PhaseRepository",
     "TagRepository",
     "TaskRepository",
+    "WorkScheduleRepository",
+    "CalendarRepository",
+    "EventRepository",
 ]

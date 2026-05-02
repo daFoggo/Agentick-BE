@@ -9,6 +9,9 @@ from app.model.task_status import TaskStatus
 from app.model.task_type import TaskType
 from app.model.task_priority import TaskPriority
 from app.model.task import Task
+from app.model.work_schedule import WorkSchedule
+from app.model.calendar import Calendar
+from app.model.event import Event
 
 __all__ = [
     "User",
@@ -22,4 +25,7 @@ __all__ = [
     "TaskType",
     "TaskPriority",
     "Task",
+    "WorkSchedule",
+    "Calendar",
+    "Event",
 ]

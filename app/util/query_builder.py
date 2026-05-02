@@ -39,6 +39,17 @@ def dict_to_sqlalchemy_filter_options(model: type, payload: dict[str, Any]):
         elif operation == "in":
             in_values = value if isinstance(value, (list, tuple, set)) else [value]
             clauses.append(column.in_(in_values))
+        elif operation == "contains":
+            # For relationship fields (Many-to-Many or One-to-Many)
+            if hasattr(column, "any"):
+                val = value[0] if isinstance(value, list) and len(value) > 0 else value
+                
+                # Check what field to filter on in the related model
+                related_model = column.property.mapper.class_
+                if hasattr(related_model, "user_id"):
+                    clauses.append(column.any(user_id=val))
+                elif hasattr(related_model, "id"):
+                    clauses.append(column.any(id=val))
         elif operation == "isnull":
             clauses.append(column.is_(None) if value else column.is_not(None))
 
