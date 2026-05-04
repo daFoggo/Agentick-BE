@@ -118,9 +118,7 @@ class TeamMemberService(BaseService):
         # Check permission
         current_member = self._repository.read_by_options(TeamMemberFind(team_id__eq=team_id, user_id__eq=current_user.id))
         if not current_member.get("founds") or current_member["founds"][0].role not in ["owner", "manager"]:
-            # User can remove themselves
-            if current_user.id != user_id:
-                raise AuthError(detail="Insufficient privileges to remove members.")
+            raise AuthError(detail="Insufficient privileges to remove members.")
         
         # Find member to remove
         target_member = self._repository.read_by_options(TeamMemberFind(team_id__eq=team_id, user_id__eq=user_id))
