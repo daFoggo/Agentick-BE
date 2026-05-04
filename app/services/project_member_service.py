@@ -134,7 +134,8 @@ class ProjectMemberService(BaseService):
 
     def remove_member(self, project_id: str, user_id: str, current_user: User):
         project = self._get_project_or_raise(project_id)
-        self._ensure_team_manager(project.team_id, current_user.id)
+        if user_id != current_user.id:
+            self._ensure_team_manager(project.team_id, current_user.id)
 
         target_member = self._repository.read_by_options(
             ProjectMemberFind(project_id__eq=project_id, user_id__eq=user_id)

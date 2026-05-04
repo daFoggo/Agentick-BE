@@ -16,7 +16,7 @@ class ProjectMemberRepository(BaseRepository):
             from app.model.project import Project
             
             # Find all project IDs belonging to this team
-            project_ids_subquery = session.query(Project.id).filter(Project.team_id == team_id).subquery()
+            project_ids_subquery = session.query(Project.id).filter(Project.team_id == team_id, Project.is_deleted.is_(False)).subquery()
             
             # Delete project member records for these projects and this user
             session.query(self.model).filter(
@@ -33,7 +33,11 @@ class ProjectMemberRepository(BaseRepository):
             count = (
                 session.query(self.model)
                 .join(Project, Project.id == self.model.project_id)
-                .filter(Project.team_id == team_id, self.model.user_id == user_id)
+                .filter(
+                    Project.team_id == team_id,
+                    self.model.user_id == user_id,
+                    Project.is_deleted.is_(False)
+                )
                 .count()
             )
             return count
