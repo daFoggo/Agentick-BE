@@ -1,12 +1,10 @@
 from contextlib import nullcontext
-from typing import List
 
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_current_active_user, get_db
 from app.model.user import User
 from app.repository.task_repository import TaskRepository
-from app.repository.project_repository import ProjectRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.task_schema import TaskCreate, TaskFind, TaskRead, TaskUpdate
 from app.services.task_service import TaskService

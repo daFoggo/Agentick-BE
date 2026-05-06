@@ -2,7 +2,8 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from app.model.event import EventType
-from app.schema.base_schema import ModelBaseInfo
+from app.schema.base_schema import ModelBaseInfo, FindBase
+from app.schema.team_member_schema import TeamMemberRead
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -41,15 +42,9 @@ class EventUpdate(BaseModel):
         return self
 
 
-from app.schema.team_member_schema import TeamMemberRead
-
-
 class EventRead(ModelBaseInfo, EventBase):
     participants: Optional[List[TeamMemberRead]] = []
     model_config = ConfigDict(from_attributes=True)
-
-
-from app.schema.base_schema import FindBase
 
 
 class EventFind(FindBase):

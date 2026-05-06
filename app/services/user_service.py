@@ -60,4 +60,3 @@ class UserService:
             exclude_user_ids=ids_to_exclude if ids_to_exclude else None,
         )
         return [UserSearchResult.model_validate(u) for u in users]
-

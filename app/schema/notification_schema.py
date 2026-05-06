@@ -2,6 +2,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from app.model.notification import NotificationType, NotificationStatus
 
+
 class NotificationResponse(BaseModel):
     id: str
     user_id: str
@@ -18,6 +19,7 @@ class NotificationResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class NotificationStatsResponse(BaseModel):
     active_count: int

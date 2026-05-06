@@ -5,6 +5,7 @@ from app.schema.user_schema import UserRead
 from app.schema.team_schema import TeamRead
 from app.schema.project_schema import ProjectRead
 
+
 class InvitationResponse(BaseModel):
     id: str
     email: str

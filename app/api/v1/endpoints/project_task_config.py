@@ -11,15 +11,32 @@ from app.repository.task_status_repository import TaskStatusRepository
 from app.repository.task_type_repository import TaskTypeRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.tag_schema import TagCreate, TagFind, TagRead, TagUpdate
-from app.schema.task_priority_schema import TaskPriorityCreate, TaskPriorityFind, TaskPriorityRead, TaskPriorityUpdate
-from app.schema.task_status_schema import TaskStatusCreate, TaskStatusFind, TaskStatusRead, TaskStatusUpdate
-from app.schema.task_type_schema import TaskTypeCreate, TaskTypeFind, TaskTypeRead, TaskTypeUpdate
+from app.schema.task_priority_schema import (
+    TaskPriorityCreate,
+    TaskPriorityFind,
+    TaskPriorityRead,
+    TaskPriorityUpdate,
+)
+from app.schema.task_status_schema import (
+    TaskStatusCreate,
+    TaskStatusFind,
+    TaskStatusRead,
+    TaskStatusUpdate,
+)
+from app.schema.task_type_schema import (
+    TaskTypeCreate,
+    TaskTypeFind,
+    TaskTypeRead,
+    TaskTypeUpdate,
+)
 from app.services.tag_service import TagService
 from app.services.task_priority_service import TaskPriorityService
 from app.services.task_status_service import TaskStatusService
 from app.services.task_type_service import TaskTypeService
 
-router = APIRouter(prefix="/projects/{project_id}/task-config", tags=["project-task-config"])
+router = APIRouter(
+    prefix="/projects/{project_id}/task-config", tags=["project-task-config"]
+)
 
 
 def get_task_status_service(db=Depends(get_db)) -> TaskStatusService:
@@ -31,7 +48,9 @@ def get_task_type_service(db=Depends(get_db)) -> TaskTypeService:
 
 
 def get_task_priority_service(db=Depends(get_db)) -> TaskPriorityService:
-    return TaskPriorityService(repository=TaskPriorityRepository(lambda: nullcontext(db)))
+    return TaskPriorityService(
+        repository=TaskPriorityRepository(lambda: nullcontext(db))
+    )
 
 
 def get_tag_service(db=Depends(get_db)) -> TagService:
@@ -169,7 +188,9 @@ def get_priorities(
     return ResponseSchema(data=result)
 
 
-@router.patch("/priorities/{priority_id}", response_model=ResponseSchema[TaskPriorityRead])
+@router.patch(
+    "/priorities/{priority_id}", response_model=ResponseSchema[TaskPriorityRead]
+)
 def update_priority(
     project_id: str,
     priority_id: str,

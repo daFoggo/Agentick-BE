@@ -1,11 +1,11 @@
 import smtplib
 from email.message import EmailMessage
 import logging
-from typing import Optional
 
 from app.core.config import configs
 
 logger = logging.getLogger(__name__)
+
 
 def send_invitation_email(
     email_to: str,

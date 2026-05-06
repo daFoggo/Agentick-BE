@@ -1,8 +1,7 @@
-from typing import List, Optional
 from app.repository.calendar_repository import CalendarRepository
 from app.repository.event_repository import EventRepository
-from app.schema.calendar_schema import CalendarCreate, CalendarRead
-from app.schema.event_schema import EventCreate, EventRead, EventUpdate
+from app.schema.calendar_schema import CalendarCreate
+from app.schema.event_schema import EventCreate, EventUpdate
 from app.services.base_service import BaseService
 
 
@@ -20,15 +19,15 @@ class CalendarService(BaseService):
         calendars = self._calendar_repo.read_by_options(
             {"owner_id__eq": user_id, "type__eq": "personal"}
         )["founds"]
-        
+
         if calendars:
             return calendars[0]
-            
+
         schema = CalendarCreate(
             owner_id=user_id,
             type="personal",
             name=f"{user_name}'s Focus Calendar",
-            description="Automatic focus calendar for tasks and personal events."
+            description="Automatic focus calendar for tasks and personal events.",
         )
         return self._calendar_repo.create(schema)
 
@@ -36,18 +35,17 @@ class CalendarService(BaseService):
         calendars = self._calendar_repo.read_by_options(
             {"owner_id__eq": team_id, "type__eq": "team"}
         )["founds"]
-        
+
         if calendars:
             return calendars[0]
-            
+
         schema = CalendarCreate(
             owner_id=team_id,
             type="team",
             name=f"{team_name}'s Shared Calendar",
-            description="Team events and shared schedules."
+            description="Team events and shared schedules.",
         )
         return self._calendar_repo.create(schema)
-
 
     def create_event(self, schema: EventCreate):
         return self._event_repo.create(schema)

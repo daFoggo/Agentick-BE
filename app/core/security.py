@@ -20,7 +20,9 @@ def _get_secret_key() -> str:
     return settings.SECRET_KEY
 
 
-def create_access_token(subject: dict[str, Any], expires_delta: timedelta | None = None) -> tuple[str, str]:
+def create_access_token(
+    subject: dict[str, Any], expires_delta: timedelta | None = None
+) -> tuple[str, str]:
     now = datetime.now(timezone.utc)
     expire = now + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -37,7 +39,9 @@ def create_access_token(subject: dict[str, Any], expires_delta: timedelta | None
     return encoded_jwt, expiration_datetime
 
 
-def create_refresh_token(subject: dict[str, Any], expires_delta: timedelta | None = None) -> tuple[str, str]:
+def create_refresh_token(
+    subject: dict[str, Any], expires_delta: timedelta | None = None
+) -> tuple[str, str]:
     now = datetime.now(timezone.utc)
     expire = now + (
         expires_delta or timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
@@ -54,7 +58,9 @@ def create_refresh_token(subject: dict[str, Any], expires_delta: timedelta | Non
     return encoded_jwt, expiration_datetime
 
 
-def create_invite_token(subject: dict[str, Any], expires_delta: timedelta | None = None) -> tuple[str, str]:
+def create_invite_token(
+    subject: dict[str, Any], expires_delta: timedelta | None = None
+) -> tuple[str, str]:
     now = datetime.now(timezone.utc)
     expire = now + (expires_delta or timedelta(days=7))
     payload = {

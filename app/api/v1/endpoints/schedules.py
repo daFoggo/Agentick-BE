@@ -51,19 +51,16 @@ def upsert_my_pattern(
 def get_team_patterns(
     team_id: str,
     service: ScheduleService = Depends(get_schedule_service),
-    db=Depends(get_db)
+    db=Depends(get_db),
 ):
     """
     Get 7-day recurring patterns for all members of a team.
     """
     team_member_repo = TeamMemberRepository(lambda: nullcontext(db))
     members = team_member_repo.read_by_options({"team_id__eq": team_id})["founds"]
-    
+
     results = []
     for m in members:
         patterns = service.get_user_patterns(m.user_id)
-        results.append({
-            "user_id": m.user_id,
-            "patterns": patterns
-        })
+        results.append({"user_id": m.user_id, "patterns": patterns})
     return ResponseSchema(data=results)

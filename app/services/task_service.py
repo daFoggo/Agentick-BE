@@ -22,6 +22,6 @@ class TaskService(BaseService):
         # Using read_by_options with eager=True to get status, phase, assignee
         result = self._repository.read_by_options(
             {"project_id__eq": project_id, "is_deleted__eq": False, "page_size": "all"},
-            eager=True
+            eager=True,
         )
         return result["founds"]

@@ -1,5 +1,4 @@
 from contextlib import nullcontext
-from typing import List
 
 from fastapi import APIRouter, Depends
 
@@ -8,21 +7,31 @@ from app.model.user import User
 from app.repository.task_status_repository import TaskStatusRepository
 from app.repository.task_type_repository import TaskTypeRepository
 from app.repository.task_priority_repository import TaskPriorityRepository
-from app.repository.phase_repository import PhaseRepository
-from app.repository.tag_repository import TagRepository
 from app.schema.base_schema import FindResult, ResponseSchema
-from app.schema.task_status_schema import TaskStatusCreate, TaskStatusFind, TaskStatusRead, TaskStatusUpdate
-from app.schema.task_type_schema import TaskTypeCreate, TaskTypeFind, TaskTypeRead, TaskTypeUpdate
-from app.schema.task_priority_schema import TaskPriorityCreate, TaskPriorityFind, TaskPriorityRead, TaskPriorityUpdate
-from app.schema.phase_schema import PhaseCreate, PhaseFind, PhaseRead, PhaseUpdate
-from app.schema.tag_schema import TagCreate, TagFind, TagRead, TagUpdate
+from app.schema.task_status_schema import (
+    TaskStatusCreate,
+    TaskStatusFind,
+    TaskStatusRead,
+    TaskStatusUpdate,
+)
+from app.schema.task_type_schema import (
+    TaskTypeCreate,
+    TaskTypeFind,
+    TaskTypeRead,
+    TaskTypeUpdate,
+)
+from app.schema.task_priority_schema import (
+    TaskPriorityCreate,
+    TaskPriorityFind,
+    TaskPriorityRead,
+    TaskPriorityUpdate,
+)
 from app.services.task_status_service import TaskStatusService
 from app.services.task_type_service import TaskTypeService
 from app.services.task_priority_service import TaskPriorityService
-from app.services.phase_service import PhaseService
-from app.services.tag_service import TagService
 
 router = APIRouter(tags=["task-management"])
+
 
 # TaskStatus dependencies and routes
 def get_task_status_service(db=Depends(get_db)) -> TaskStatusService:
@@ -164,7 +173,9 @@ def get_task_priorities(
     return ResponseSchema(data=result)
 
 
-@router.get("/priorities/{priority_id}", response_model=ResponseSchema[TaskPriorityRead])
+@router.get(
+    "/priorities/{priority_id}", response_model=ResponseSchema[TaskPriorityRead]
+)
 def get_task_priority(
     priority_id: str,
     current_user: User = Depends(get_current_active_user),
@@ -174,7 +185,9 @@ def get_task_priority(
     return ResponseSchema(data=result)
 
 
-@router.patch("/priorities/{priority_id}", response_model=ResponseSchema[TaskPriorityRead])
+@router.patch(
+    "/priorities/{priority_id}", response_model=ResponseSchema[TaskPriorityRead]
+)
 def update_task_priority(
     priority_id: str,
     schema: TaskPriorityUpdate,

@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from app.model.user import User
 
 
-
 class ProjectMember(BaseModel):
     __tablename__ = "project_member"
 

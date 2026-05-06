@@ -2,6 +2,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from app.schema.base_schema import FindBase, ModelBaseInfo
+from app.schema.project_member_schema import ProjectMemberRead
 
 
 class TaskBase(BaseModel):
@@ -52,8 +53,6 @@ class TaskUpdate(BaseModel):
     order: Optional[float] = Field(None, ge=0)
     is_archived: Optional[bool] = None
 
-
-from app.schema.project_member_schema import ProjectMemberRead
 
 class TaskRead(ModelBaseInfo):
     project_id: str

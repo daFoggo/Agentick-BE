@@ -22,7 +22,12 @@ from app.schema.project_member_schema import (
     ProjectInviteTokenResponse,
     ProjectInviteAcceptRequest,
 )
-from app.schema.project_schema import ProjectCreate, ProjectFind, ProjectRead, ProjectUpdate
+from app.schema.project_schema import (
+    ProjectCreate,
+    ProjectFind,
+    ProjectRead,
+    ProjectUpdate,
+)
 from app.schema.task_schema import TaskRead
 from app.services.project_member_service import ProjectMemberService
 from app.services.project_service import ProjectService
@@ -124,7 +129,10 @@ def delete_project(
     return ResponseSchema(data=True, message="Project deleted successfully")
 
 
-@router.get("/{project_id}/members", response_model=ResponseSchema[FindResult[ProjectMemberRead]])
+@router.get(
+    "/{project_id}/members",
+    response_model=ResponseSchema[FindResult[ProjectMemberRead]],
+)
 def get_project_members(
     project_id: str,
     current_user: User = Depends(get_current_active_user),
@@ -145,7 +153,9 @@ def add_project_member(
     return ResponseSchema(data=result, message="Member added successfully")
 
 
-@router.patch("/{project_id}/members/{user_id}", response_model=ResponseSchema[ProjectMemberRead])
+@router.patch(
+    "/{project_id}/members/{user_id}", response_model=ResponseSchema[ProjectMemberRead]
+)
 def update_project_member(
     project_id: str,
     user_id: str,
@@ -168,23 +178,30 @@ def remove_project_member(
     return ResponseSchema(data=True, message="Member removed successfully")
 
 
-@router.post("/{project_id}/invitations/generate", response_model=ResponseSchema[ProjectInviteTokenResponse])
+@router.post(
+    "/{project_id}/invitations/generate",
+    response_model=ResponseSchema[ProjectInviteTokenResponse],
+)
 def generate_project_invitation(
     project_id: str,
     schema: ProjectInviteGenerateRequest,
     current_user: User = Depends(get_current_active_user),
     project_service: ProjectService = Depends(get_project_service),
     project_member_service: ProjectMemberService = Depends(get_project_member_service),
-    invitation_service: InvitationService = Depends(get_invitation_service)
+    invitation_service: InvitationService = Depends(get_invitation_service),
 ):
     project_member_service.check_permission(project_id, current_user.id, "manager")
-    
+
     project = project_service.get_project_details(project_id, current_user)
-    
+
     # Check if user with this email is already a member
     target_user = invitation_service.user_repository.read_by_email(schema.email)
-    if target_user and project_member_service.is_user_member(project_id, target_user.id):
-        raise DuplicatedError(detail=f"User with email {schema.email} is already a member of this project.")
+    if target_user and project_member_service.is_user_member(
+        project_id, target_user.id
+    ):
+        raise DuplicatedError(
+            detail=f"User with email {schema.email} is already a member of this project."
+        )
 
     invitation = invitation_service.create_and_send_invitation(
         email=schema.email,
@@ -192,16 +209,19 @@ def generate_project_invitation(
         role=schema.role,
         project_id=project_id,
         team_id=project.team_id,
-        target_name=project.name
+        target_name=project.name,
     )
-    return ResponseSchema(data=ProjectInviteTokenResponse(token=invitation.id), message="Invitation sent successfully")
+    return ResponseSchema(
+        data=ProjectInviteTokenResponse(token=invitation.id),
+        message="Invitation sent successfully",
+    )
 
 
 @router.post("/invitations/accept", response_model=ResponseSchema[ProjectMemberRead])
 def accept_project_invitation(
     schema: ProjectInviteAcceptRequest,
     current_user: User = Depends(get_current_active_user),
-    service: ProjectMemberService = Depends(get_project_member_service)
+    service: ProjectMemberService = Depends(get_project_member_service),
 ):
     result = service.accept_invite_token(schema.token, current_user)
     return ResponseSchema(data=result, message="Successfully joined the project")

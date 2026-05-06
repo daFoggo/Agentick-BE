@@ -8,7 +8,6 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
-from app.model.user import User
 from app.repository.user_repository import UserRepository
 from app.schema.auth_schema import (
     RefreshTokenRequest,
@@ -57,15 +56,14 @@ class AuthService:
             hashed_password=get_password_hash(schema.password),
             user_token=uuid4().hex,
         )
-        
+
         try:
             # Create user without committing
             user = self._user_repository.create(user_schema, auto_commit=False)
 
             # Create default team without committing
             team_create = TeamCreate(
-                name=f"{user.name}'s Team",
-                description=f"Default team for {user.name}"
+                name=f"{user.name}'s Team", description=f"Default team for {user.name}"
             )
             team = self._team_service.create_team(team_create, user, auto_commit=False)
 
@@ -86,10 +84,10 @@ class AuthService:
 
             # Manual commit for the entire transaction
             self._user_repository.commit()
-            
+
             return self._user_service.to_user_info(user)
         except Exception as e:
-            # In case of any error, we don't commit. 
+            # In case of any error, we don't commit.
             # SQLAlchemy session from get_db will handle rollback on exception.
             raise e
 

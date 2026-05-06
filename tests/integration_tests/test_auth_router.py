@@ -78,6 +78,8 @@ def test_sign_in_wrong_password(client, database) -> None:
         session.add(user)
         session.commit()
 
-    response = client.post("/api/v1/auth/sign-in", json={"email__eq": email, "password": password + "x"})
+    response = client.post(
+        "/api/v1/auth/sign-in", json={"email__eq": email, "password": password + "x"}
+    )
 
     assert response.status_code == 403

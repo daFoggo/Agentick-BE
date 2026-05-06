@@ -13,13 +13,21 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class BaseRepository:
-    def __init__(self, session_factory: Callable[..., AbstractContextManager[Session]], model: Type[T]) -> None:
+    def __init__(
+        self,
+        session_factory: Callable[..., AbstractContextManager[Session]],
+        model: Type[T],
+    ) -> None:
         self.session_factory = session_factory
         self.model = model
 
     def read_by_options(self, schema: T, eager: bool = False) -> dict:
         with self.session_factory() as session:
-            schema_as_dict: dict = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
+            schema_as_dict: dict = (
+                schema.model_dump(exclude_none=True)
+                if hasattr(schema, "model_dump")
+                else schema
+            )
             ordering: str = schema_as_dict.get("ordering", settings.ORDERING)
             order_query = (
                 getattr(self.model, ordering[1:]).desc()
@@ -28,7 +36,9 @@ class BaseRepository:
             )
             page = schema_as_dict.get("page", settings.PAGE)
             page_size = schema_as_dict.get("page_size", settings.PAGE_SIZE)
-            filter_options = dict_to_sqlalchemy_filter_options(self.model, schema_as_dict)
+            filter_options = dict_to_sqlalchemy_filter_options(
+                self.model, schema_as_dict
+            )
             query = session.query(self.model)
             if eager:
                 for eager in getattr(self.model, "eagers", []):
@@ -76,22 +86,39 @@ class BaseRepository:
                 raise DuplicatedError(detail=str(e.orig))
             return query
 
-    def update(self, id: str, schema: T | dict, auto_commit: bool = True, eager: bool = False):
-        data = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
+    def update(
+        self, id: str, schema: T | dict, auto_commit: bool = True, eager: bool = False
+    ):
+        data = (
+            schema.model_dump(exclude_none=True)
+            if hasattr(schema, "model_dump")
+            else schema
+        )
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update(data)
             if auto_commit:
                 session.commit()
             return self.read_by_id(id, eager=eager)
 
-    def update_attr(self, id: str, column: str, value: Any, auto_commit: bool = True, eager: bool = False):
+    def update_attr(
+        self,
+        id: str,
+        column: str,
+        value: Any,
+        auto_commit: bool = True,
+        eager: bool = False,
+    ):
         with self.session_factory() as session:
-            session.query(self.model).filter(self.model.id == id).update({column: value})
+            session.query(self.model).filter(self.model.id == id).update(
+                {column: value}
+            )
             if auto_commit:
                 session.commit()
             return self.read_by_id(id, eager=eager)
 
-    def whole_update(self, id: str, schema: T | dict, auto_commit: bool = True, eager: bool = False):
+    def whole_update(
+        self, id: str, schema: T | dict, auto_commit: bool = True, eager: bool = False
+    ):
         data = schema.model_dump() if hasattr(schema, "model_dump") else schema
         with self.session_factory() as session:
             session.query(self.model).filter(self.model.id == id).update(data)
