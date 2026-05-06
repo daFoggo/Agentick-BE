@@ -14,6 +14,7 @@ from app.api.v1.endpoints.notifications import router as notifications_router
 from app.api.v1.endpoints.schedules import router as schedules_router
 from app.api.v1.endpoints.events import router as events_router
 from app.api.v1.endpoints.tasks import router as tasks_router
+from app.api.v1.endpoints.agent import router as agent_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -28,6 +29,7 @@ router.include_router(notifications_router)
 router.include_router(schedules_router)
 router.include_router(events_router)
 router.include_router(tasks_router)
+router.include_router(agent_router)
 
 
 @router.get("/ping", tags=["System"])

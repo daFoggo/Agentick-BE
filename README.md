@@ -37,9 +37,19 @@ The database starts empty. You must apply migrations to create the tables.
 docker exec agentick-be-api alembic upgrade head
 ```
 
+### 4. AI Agent & Observability (OpenRouter & Opik)
+Our backend features an intelligent AI Agent to automate project tasks, monitored via Opik.
+- Configure your OpenRouter and Opik credentials in your `.env` file.
+- To enable the **Opik Agent Playground** with live local pairing, run:
+```bash
+uv run opik endpoint --project "Agentick" -- uv run uvicorn app.main:app --port 8000 --reload
+```
+For detailed setup and integration, please see the master guide: **[docs/agent_guide.md](docs/agent_guide.md)**.
+
 **Result:** Your API is now live at `http://localhost:8000/docs`.
 
 ---
+
 
 ## 🛠 Maintenance Commands
 
@@ -102,6 +112,11 @@ To maintain a consistent codebase, follow these steps when adding a new feature:
 
 ## 📚 Recommended Documentation
 
+### 🏠 Internal Reference Guides
+* **[docs/agent_guide.md](docs/agent_guide.md)** - Master configuration guide for AI Agent, OpenRouter, and Opik Observability.
+* **[docs/models.md](docs/models.md)** - Sơ đồ ERD và chi tiết các mô hình cơ sở dữ liệu SQLAlchemy.
+
+### 🌐 Technology Ecosystem Docs
 | Technology | Link |
 | :--- | :--- |
 | **FastAPI** | [https://fastapi.tiangolo.com/](https://fastapi.tiangolo.com/) |
@@ -111,3 +126,4 @@ To maintain a consistent codebase, follow these steps when adding a new feature:
 | **UV (Package Manager)** | [https://docs.astral.sh/uv/](https://docs.astral.sh/uv/) |
 | **PostgreSQL** | [https://www.postgresql.org/](https://www.postgresql.org/) |
 | **Docker** | [https://www.docker.com/](https://www.docker.com/) |
+
