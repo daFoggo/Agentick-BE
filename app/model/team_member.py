@@ -1,9 +1,15 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 from sqlalchemy import String, ForeignKey, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
 from app.model.member_role import MemberRole
+
+if TYPE_CHECKING:
+    from app.model.team import Team
+    from app.model.user import User
+
 
 
 class TeamMember(BaseModel):

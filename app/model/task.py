@@ -1,8 +1,19 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, DateTime, Float, String, ForeignKey, Text, Column, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.model.project import Project
+    from app.model.task_status import TaskStatus
+    from app.model.task_type import TaskType
+    from app.model.task_priority import TaskPriority
+    from app.model.project_member import ProjectMember
+    from app.model.phase import Phase
+    from app.model.tag import Tag
+
 
 
 task_tag = Table(

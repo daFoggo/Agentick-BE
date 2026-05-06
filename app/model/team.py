@@ -1,7 +1,14 @@
+from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.model.user import User
+    from app.model.team_member import TeamMember
+    from app.model.project import Project
+
 
 
 class Team(BaseModel):

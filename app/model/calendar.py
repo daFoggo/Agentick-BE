@@ -1,5 +1,5 @@
 from enum import Enum
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.model.base_model import BaseModel

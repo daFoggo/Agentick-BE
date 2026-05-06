@@ -1,9 +1,16 @@
 from enum import Enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 from sqlalchemy import DateTime, String, ForeignKey, Text, Column, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.model.user import User
+    from app.model.team import Team
+    from app.model.team_member import TeamMember
+
 
 
 class EventType(str, Enum):

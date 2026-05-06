@@ -1,7 +1,12 @@
+from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, String, ForeignKey, Float, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.model.project import Project
+
 
 
 class TaskPriority(BaseModel):

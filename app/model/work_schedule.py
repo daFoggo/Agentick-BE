@@ -1,7 +1,13 @@
-from sqlalchemy import Boolean, String, ForeignKey, Time, Integer
+from typing import TYPE_CHECKING
+from sqlalchemy import Boolean, String, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.model.team import Team
+    from app.model.user import User
+
 
 
 class WorkSchedule(BaseModel):
