@@ -54,6 +54,7 @@ class TaskUpdate(BaseModel):
 
 
 from app.schema.project_member_schema import ProjectMemberRead
+from app.schema.task_status_schema import TaskStatusRead
 
 class TaskRead(ModelBaseInfo):
     project_id: str
@@ -72,6 +73,7 @@ class TaskRead(ModelBaseInfo):
     is_archived: bool
     is_deleted: bool
     assignees: Optional[List[ProjectMemberRead]] = []
+    status: Optional[TaskStatusRead] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -86,3 +88,5 @@ class TaskFind(FindBase):
     assignee_ids__contains: Optional[str] = None
     is_archived__eq: Optional[bool] = None
     is_deleted__eq: Optional[bool] = False
+    # Dashboard Overview: filter tasks assigned to a specific user (by user.id)
+    assignee_user_id__eq: Optional[str] = None

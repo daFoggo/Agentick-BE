@@ -9,6 +9,10 @@ class TaskService(BaseService):
     def add(self, schema: Any) -> Any:
         return super().add(schema)
 
+    def get_list_eager(self, schema: Any) -> Any:
+        """Lấy danh sách task kèm eager load relationships (status, assignees, v.v.)."""
+        return self._repository.read_by_options(schema, eager=True)
+
     def patch(self, id: str, schema: Any) -> Any:
         return super().patch(id, schema)
 
