@@ -90,3 +90,51 @@ class TaskFind(FindBase):
     is_deleted__eq: Optional[bool] = False
     # Dashboard Overview: filter tasks assigned to a specific user (by user.id)
     assignee_user_id__eq: Optional[str] = None
+
+
+# ── Dashboard: Task Stats ─────────────────────────────────────────────────────
+
+class TaskStatItem(BaseModel):
+    """Một nhóm thống kê (priority / status / type) với số lượng task."""
+    id: str
+    name: str
+    color: str
+    count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectTaskStats(BaseModel):
+    """Response cho GET /projects/{project_id}/tasks/stats"""
+    by_priority: List[TaskStatItem]
+    by_status: List[TaskStatItem]
+    by_type: List[TaskStatItem]
+    period: str        # "weekly" | "monthly"
+    date_from: str     # ISO date string
+    date_to: str       # ISO date string
+
+
+# ── Dashboard: Member Workload ────────────────────────────────────────────────
+
+class WorkloadDataPoint(BaseModel):
+    """Số task của một member trong một ngày cụ thể."""
+    date: str          # "YYYY-MM-DD"
+    task_count: int
+
+
+class MemberWorkload(BaseModel):
+    """Workload series của một member trong project."""
+    user_id: str
+    name: str
+    avatar_url: Optional[str] = None
+    series: List[WorkloadDataPoint]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectWorkloadResponse(BaseModel):
+    """Response cho GET /projects/{project_id}/members/workload"""
+    members: List[MemberWorkload]
+    period: str        # "weekly" | "monthly"
+    date_from: str
+    date_to: str
