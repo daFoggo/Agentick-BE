@@ -75,7 +75,7 @@ class TaskTools:
                             "type_id",
                             "assigner_id",
                             "start_date",
-                            "due_date"
+                            "due_date",
                         ],
                     },
                 },

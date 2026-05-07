@@ -20,7 +20,9 @@ class TaskTimeLog(BaseModel):
         String(36), ForeignKey("user.id"), nullable=False
     )
 
-    log_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'timer' | 'manual'
+    log_type: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # 'timer' | 'manual'
 
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

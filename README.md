@@ -110,6 +110,21 @@ To maintain a consistent codebase, follow these steps when adding a new feature:
 }
 ```
 
+### 🧹 Code Quality (Ruff) - MANDATORY BEFORE PUSH
+
+We use **Ruff** for lightning-fast linting, formatting, and automatic error fixing.
+> [!IMPORTANT]
+> To maintain high code quality and consistency, you **MUST** run the check, fix, and formatting commands before pushing any code to GitHub:
+>
+> 1. **Check & Auto-Fix Errors:**
+>    ```bash
+>    uv run ruff check . --fix
+>    ```
+> 2. **Format Code:**
+>    ```bash
+>    uv run ruff format .
+>    ```
+
 ---
 
 ## 📚 Recommended Documentation

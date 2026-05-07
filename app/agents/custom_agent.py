@@ -151,4 +151,3 @@ Requirements:
             response.raise_for_status()
             res_json = response.json()
             return res_json["choices"][0]["message"]["content"]
-

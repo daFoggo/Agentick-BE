@@ -24,7 +24,9 @@ class AgentOutreach(BaseModel):
         String(50), nullable=False
     )  # 'missing_estimate' | 'missing_progress' | 'stale_update'
 
-    channel: Mapped[str] = mapped_column(String(20), nullable=False)  # 'email' | 'telegram' | 'in_app'
+    channel: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # 'email' | 'telegram' | 'in_app'
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     responded_at: Mapped[datetime | None] = mapped_column(

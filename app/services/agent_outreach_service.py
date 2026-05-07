@@ -1,15 +1,15 @@
 from datetime import datetime, timezone
-from typing import List, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import select, desc
+from typing import Any, Dict, List
 
-from app.model.task import Task
-from app.model.user import User
-from app.model.risk_snapshot import RiskSnapshot
+from sqlalchemy import desc, select
+from sqlalchemy.orm import Session
+
+from app.agents.custom_agent import CustomAgent
 from app.model.agent_outreach import AgentOutreach
+from app.model.risk_snapshot import RiskSnapshot
+from app.model.task import Task
 from app.model.task_checkpoint import TaskCheckpoint
 from app.model.task_time_log import TaskTimeLog
-from app.agents.custom_agent import CustomAgent
 from app.utils.email import send_agent_outreach_email
 
 
@@ -27,31 +27,38 @@ class AgentOutreachService:
 
         # 1. Critical Gap: Estimated Hours missing
         if task.estimated_hours is None:
-            gaps.append({
-                "field": "estimated_hours",
-                "question": "How many hours do you estimate this task will take to complete?",
-                "urgency": "high"
-            })
+            gaps.append(
+                {
+                    "field": "estimated_hours",
+                    "question": "How many hours do you estimate this task will take to complete?",
+                    "urgency": "high",
+                }
+            )
             urgency = "high"
 
         # 2. Important Gap: Task is active but has no progress checkpoints logged after start date
         if task.start_date:
             now_utc = datetime.now(timezone.utc)
             days_since_start = (now_utc - task.start_date).days
-            
+
             # Check if there are checkpoints
-            checkpoints_exist = self.db.scalar(
-                select(TaskCheckpoint)
-                .where(TaskCheckpoint.task_id == task.id)
-                .limit(1)
-            ) is not None
-            
+            checkpoints_exist = (
+                self.db.scalar(
+                    select(TaskCheckpoint)
+                    .where(TaskCheckpoint.task_id == task.id)
+                    .limit(1)
+                )
+                is not None
+            )
+
             if days_since_start > 1 and not checkpoints_exist:
-                gaps.append({
-                    "field": "progress",
-                    "question": "What is the current progress level and how many remaining hours do you expect?",
-                    "urgency": "medium"
-                })
+                gaps.append(
+                    {
+                        "field": "progress",
+                        "question": "What is the current progress level and how many remaining hours do you expect?",
+                        "urgency": "medium",
+                    }
+                )
                 if urgency != "high":
                     urgency = "medium"
 
@@ -114,7 +121,7 @@ class AgentOutreachService:
         last_activity = max(
             task.updated_at,
             last_time_log.created_at if last_time_log else task.updated_at,
-            last_checkpoint.created_at if last_checkpoint else task.updated_at
+            last_checkpoint.created_at if last_checkpoint else task.updated_at,
         )
 
         hours_stale = (now_utc - last_activity).total_seconds() / 3600
@@ -133,8 +140,8 @@ class AgentOutreachService:
         # Fetch active tasks
         tasks = self.db.scalars(
             select(Task)
-            .where(Task.is_archived == False)
-            .where(Task.is_deleted == False)
+            .where(Task.is_archived.is_(False))
+            .where(Task.is_deleted.is_(False))
         ).all()
 
         outreaches_sent = []
@@ -164,16 +171,22 @@ class AgentOutreachService:
             elif stale_alert:
                 should_outreach = True
                 outreach_type = "stale_update"
-                gaps_to_report = gap_report["gaps"] if gap_report["gaps"] else [
-                    {
-                        "field": "general_update",
-                        "question": "Can you please provide a general progress update or checkpoint for this task?",
-                        "urgency": "medium"
-                    }
-                ]
+                gaps_to_report = (
+                    gap_report["gaps"]
+                    if gap_report["gaps"]
+                    else [
+                        {
+                            "field": "general_update",
+                            "question": "Can you please provide a general progress update or checkpoint for this task?",
+                            "urgency": "medium",
+                        }
+                    ]
+                )
 
             if should_outreach and outreach_type:
-                days_to_deadline = (task.due_date - now_utc).days if task.due_date else 0
+                days_to_deadline = (
+                    (task.due_date - now_utc).days if task.due_date else 0
+                )
                 hours_stale = (now_utc - task.updated_at).total_seconds() / 3600
 
                 for assignee in task.assignees:
@@ -216,8 +229,12 @@ class AgentOutreachService:
                     snapshot = RiskSnapshot(
                         task_id=task.id,
                         risk_score=0.8 if outreach_type == "missing_estimate" else 0.6,
-                        risk_level="high" if outreach_type == "missing_estimate" else "medium",
-                        alert_type="data_gap" if outreach_type == "missing_estimate" else "stale",
+                        risk_level="high"
+                        if outreach_type == "missing_estimate"
+                        else "medium",
+                        alert_type="data_gap"
+                        if outreach_type == "missing_estimate"
+                        else "stale",
                         alert_sent=True,
                         alert_sent_at=now_utc,
                         signals=[f"Outreach sent due to: {outreach_type}"],
@@ -225,13 +242,15 @@ class AgentOutreachService:
                     )
                     self.db.add(snapshot)
 
-                    outreaches_sent.append({
-                        "task_id": task.id,
-                        "user_id": user_obj.id,
-                        "outreach_type": outreach_type,
-                        "email": user_obj.email,
-                        "email_body": email_body,
-                    })
+                    outreaches_sent.append(
+                        {
+                            "task_id": task.id,
+                            "user_id": user_obj.id,
+                            "outreach_type": outreach_type,
+                            "email": user_obj.email,
+                            "email_body": email_body,
+                        }
+                    )
 
         if outreaches_sent:
             self.db.commit()
