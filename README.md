@@ -68,10 +68,12 @@ Agentick-BE follows the **Clean Architecture** pattern to separate concerns and 
 
 ### Folder Breakdown
 - `app/api/v1/endpoints/`: Handles HTTP requests, input validation, and formatting responses.
-- `app/services/`: Contains core business logic and cross-repository coordination.
+- `app/services/`: Contains core business logic, cross-repository coordination, and proactive agent outreach.
 - `app/repository/`: Handles data access and SQLAlchemy queries (Inherits from `base_repository.py`).
 - `app/model/`: Defines database tables using SQLAlchemy (Inherits from `base_model.py`).
 - `app/schema/`: Defines data validation and serialization using Pydantic.
+- `app/agents/`: AI Agent core reasoning loops, LLM interaction, and copywriting.
+- `app/tools/`: Adapters and external function definitions/execution mapping for LLM.
 - `app/core/`: System-wide configurations (Security, Database, Dependencies).
 - `migrations/`: Historical records of database schema changes managed by Alembic.
 
@@ -113,7 +115,7 @@ To maintain a consistent codebase, follow these steps when adding a new feature:
 ## 📚 Recommended Documentation
 
 ### 🏠 Internal Reference Guides
-* **[docs/agent_guide.md](docs/agent_guide.md)** - Master configuration guide for AI Agent, OpenRouter, and Opik Observability.
+* **[docs/agent_guide.md](docs/agent_guide.md)** - Master configuration guide for AI Agent, OpenRouter, Opik Observability, and **Anthropic's "Building Effective Agents" Best Practices** applied.
 * **[docs/models.md](docs/models.md)** - Sơ đồ ERD và chi tiết các mô hình cơ sở dữ liệu SQLAlchemy.
 
 ### 🌐 Technology Ecosystem Docs

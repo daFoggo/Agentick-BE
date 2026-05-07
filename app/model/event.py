@@ -1,15 +1,17 @@
-from enum import Enum
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING
-from sqlalchemy import DateTime, String, ForeignKey, Text, Column, Table
+
+from sqlalchemy import Column, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
 
 if TYPE_CHECKING:
-    from app.model.user import User
+    from app.model.task import Task
     from app.model.team import Team
     from app.model.team_member import TeamMember
+    from app.model.user import User
 
 
 class EventType(str, Enum):
@@ -45,6 +47,10 @@ class Event(BaseModel):
     team_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("team.id"), nullable=False, index=True
     )
+    task_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("task.id"), nullable=True
+    )
+    event_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     type: Mapped[str] = mapped_column(String(50), nullable=False)
 
@@ -59,6 +65,7 @@ class Event(BaseModel):
     # Relationships
     user: Mapped["User"] = relationship("User")
     team: Mapped["Team"] = relationship("Team")
+    task: Mapped["Task | None"] = relationship("Task")
     participants: Mapped[list["TeamMember"]] = relationship(
         "TeamMember", secondary=event_participant
     )

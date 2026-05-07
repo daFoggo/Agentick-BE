@@ -97,6 +97,8 @@ erDiagram
         datetime start_date
         datetime due_date
         float order
+        float estimated_hours
+        float actual_hours
         boolean is_archived
         boolean is_deleted
         datetime created_at
@@ -202,6 +204,8 @@ erDiagram
         string id PK
         string user_id FK
         string team_id FK
+        string task_id FK
+        string event_category
         string type
         string title
         string description
@@ -226,6 +230,53 @@ erDiagram
         string team_member_id FK, PK
     }
 
+    TASK_TIME_LOG {
+        string id PK
+        string task_id FK
+        string user_id FK
+        float logged_hours
+        datetime logged_date
+        string description
+        datetime created_at
+        datetime updated_at
+    }
+
+    TASK_CHECKPOINT {
+        string id PK
+        string task_id FK
+        string user_id FK
+        float progress_percentage
+        float remaining_hours
+        string notes
+        datetime created_at
+        datetime updated_at
+    }
+
+    RISK_SNAPSHOT {
+        string id PK
+        string task_id FK
+        float risk_score
+        string risk_level
+        string alert_type
+        boolean alert_sent
+        datetime alert_sent_at
+        string recommendation
+        json signals
+        datetime created_at
+        datetime updated_at
+    }
+
+    AGENT_OUTREACH {
+        string id PK
+        string task_id FK
+        string user_id FK
+        string outreach_type
+        string channel
+        datetime sent_at
+        datetime created_at
+        datetime updated_at
+    }
+
     %% Relationships
     USER ||--o{ TEAM : "owns (owner_id)"
     USER ||--o{ NOTIFICATION : "has"
@@ -234,6 +285,9 @@ erDiagram
     USER ||--o{ WORK_SCHEDULE : "has_schedule"
     USER ||--o{ EVENT : "creates"
     USER ||--o{ INVITATION : "invites"
+    USER ||--o{ TASK_TIME_LOG : "logs_time"
+    USER ||--o{ TASK_CHECKPOINT : "logs_checkpoints"
+    USER ||--o{ AGENT_OUTREACH : "receives_outreaches"
 
     TEAM ||--o{ TEAM_MEMBER : "contains"
     TEAM ||--o{ PROJECT : "hosts"
@@ -262,6 +316,11 @@ erDiagram
     TASK }o--|| TASK_TYPE : "has_type"
     TASK }o--|| TASK_PRIORITY : "has_priority"
     TASK }o--|| PHASE : "belongs_to"
+    TASK ||--o{ TASK_TIME_LOG : "has_logs"
+    TASK ||--o{ TASK_CHECKPOINT : "has_checkpoints"
+    TASK ||--o{ RISK_SNAPSHOT : "has_risk_snapshots"
+    TASK ||--o{ AGENT_OUTREACH : "has_outreaches"
+    TASK ||--o{ EVENT : "associated_events"
 
     EVENT ||--o{ EVENT_PARTICIPANT : "has"
     TEAM_MEMBER ||--o{ EVENT_PARTICIPANT : "has"
@@ -377,6 +436,8 @@ Công việc cụ thể cần thực hiện trong dự án. Model này hỗ tr�
   - `start_date` (`DateTime`, nullable): Ngày bắt đầu công việc.
   - `due_date` (`DateTime`, nullable): Hạn chót công việc.
   - `order` (`Float`, default `0.0`): Thứ tự sắp xếp công việc (ví dụ trong bảng Kanban hoặc danh sách).
+  - `estimated_hours` (`Float`, nullable): Thời lượng ước tính ban đầu để hoàn thành công việc (phục vụ dự đoán rủi ro).
+  - `actual_hours` (`Float`, default `0.0`): Tổng số giờ làm việc thực tế đã ghi nhận.
   - `is_archived` (`Boolean`, default `False`): Trạng thái lưu trữ công việc.
   - `is_deleted` (`Boolean`, default `False`): Trạng thái xóa mềm.
 - **Quan hệ:**
@@ -466,6 +527,8 @@ Sự kiện diễn ra trên lịch biểu (Cuộc họp, giờ tập trung, xin 
 - **Trường dữ liệu:**
   - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` (Người tạo sự kiện).
   - `team_id` (`String(36)`): Khóa ngoại liên kết tới `Team` (Sự kiện thuộc về Nhóm nào).
+  - `task_id` (`String(36)`, nullable): Khóa ngoại liên kết tới `Task` để xác định sự kiện này dành cho công việc cụ thể nào.
+  - `event_category` (`String(50)`, nullable): Danh mục sự kiện (phục vụ mục đích theo dõi và tính toán phân bổ thời gian thực tế của Agent).
   - `type` (`String(50)`): Loại sự kiện (từ enum `EventType` gồm `meeting`, `focus_time`, `leave`).
   - `title` (`String(255)`): Tiêu đề sự kiện.
   - `description` (`Text`, nullable): Mô tả sự kiện.
@@ -474,6 +537,7 @@ Sự kiện diễn ra trên lịch biểu (Cuộc họp, giờ tập trung, xin 
 - **Quan hệ:**
   - `user` (Quan hệ N-1 với `User`).
   - `team` (Quan hệ N-1 với `Team`).
+  - `task` (Quan hệ N-1 với `Task`).
   - `participants` (Quan hệ N-N với `TeamMember` thông qua bảng trung gian `event_participant` biểu thị những ai tham gia sự kiện).
 
 ---
@@ -508,6 +572,58 @@ Hệ thống thông báo đẩy tới người dùng.
   - `resource_type` (`String(50)`, nullable): Loại tài nguyên (ví dụ: `"invitation"`, `"task"`).
   - `data` (`JSON`, nullable): Metadata phụ đi kèm dạng JSON để hiển thị động thông tin trên Frontend.
 - **Quan hệ:**
+  - `user` (Quan hệ N-1 với `User`).
+
+### 2.7. Hệ thống Theo dõi Thời gian, Rủi ro & Tiếp cận Thành viên (Time Logging, Checkpoints, Risk, & Outreach)
+
+#### 17. [TaskTimeLog](file:///d:/Dev%20projects/Agentick-BE/app/model/task_time_log.py) (Bảng `task_time_log`)
+Ghi nhận thời gian thực tế đã bỏ ra cho một Task bởi thành viên cụ thể.
+- **Trường dữ liệu:**
+  - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
+  - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` người thực hiện ghi nhận.
+  - `logged_hours` (`Float`): Số giờ thực tế đã làm việc.
+  - `logged_date` (`Date`): Ngày làm việc được ghi nhận.
+  - `description` (`Text`, nullable): Ghi chú mô tả phần việc đã thực hiện.
+- **Quan hệ:**
+  - `task` (Quan hệ N-1 với `Task`).
+  - `user` (Quan hệ N-1 với `User`).
+
+#### 18. [TaskCheckpoint](file:///d:/Dev%20projects/Agentick-BE/app/model/task_checkpoint.py) (Bảng `task_checkpoint`)
+Lưu giữ tiến độ cập nhật thực tế tại các thời điểm kiểm tra của Task.
+- **Trường dữ liệu:**
+  - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
+  - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` ghi nhận checkpoint.
+  - `progress_percentage` (`Float`): Phần trăm tiến độ công việc (từ `0.0` đến `100.0`).
+  - `remaining_hours` (`Float`, nullable): Số giờ ước tính còn lại cần thiết để hoàn thành công việc.
+  - `notes` (`Text`, nullable): Nhận xét hoặc ghi chú tình trạng tiến độ.
+- **Quan hệ:**
+  - `task` (Quan hệ N-1 với `Task`).
+  - `user` (Quan hệ N-1 với `User`).
+
+#### 19. [RiskSnapshot](file:///d:/Dev%20projects/Agentick-BE/app/model/risk_snapshot.py) (Bảng `risk_snapshot`)
+Ảnh chụp rủi ro công việc được phân tích và đánh giá tự động bởi AI Agent tại một thời điểm cụ thể.
+- **Trường dữ liệu:**
+  - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
+  - `risk_score` (`Float`): Điểm số rủi ro (từ `0.0` đến `1.0`).
+  - `risk_level` (`String(20)`): Phân loại mức độ rủi ro (`low`, `medium`, `high`).
+  - `alert_type` (`String(50)`): Loại cảnh báo rủi ro kích hoạt (`data_gap`, `stale`, `high_risk`).
+  - `alert_sent` (`Boolean`, default `False`): Đã gửi cảnh báo liên hệ người dùng hay chưa.
+  - `alert_sent_at` (`DateTime`, nullable): Thời điểm gửi cảnh báo.
+  - `signals` (`JSON`): Các tín hiệu/dữ liệu rủi ro phân tích bởi AI (ví dụ: thiếu estimated_hours, quá hạn, v.v.).
+  - `recommendation` (`Text`): Đề xuất đề xuất giải quyết rủi ro do AI đưa ra.
+- **Quan hệ:**
+  - `task` (Quan hệ N-1 với `Task`).
+
+#### 20. [AgentOutreach](file:///d:/Dev%20projects/Agentick-BE/app/model/agent_outreach.py) (Bảng `agent_outreach`)
+Lịch sử Agent chủ động tương tác ra bên ngoài hệ thống với người dùng để hỏi thông tin hoặc cảnh báo.
+- **Trường dữ liệu:**
+  - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
+  - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` người nhận thông tin.
+  - `outreach_type` (`String(50)`): Loại tiếp cận (`missing_estimate`, `stale_update`).
+  - `channel` (`String(50)`, default `"email"`): Kênh tương tác tiếp cận (ví dụ: `email`, `slack`).
+  - `sent_at` (`DateTime`): Thời điểm gửi tiếp cận thực tế.
+- **Quan hệ:**
+  - `task` (Quan hệ N-1 với `Task`).
   - `user` (Quan hệ N-1 với `User`).
 
 ---
