@@ -131,7 +131,7 @@ We use **Ruff** for lightning-fast linting, formatting, and automatic error fixi
 
 ### 🏠 Internal Reference Guides
 * **[docs/agent_guide.md](docs/agent_guide.md)** - Master configuration guide for AI Agent, OpenRouter, Opik Observability, and **Anthropic's "Building Effective Agents" Best Practices** applied.
-* **[docs/models.md](docs/models.md)** - Sơ đồ ERD và chi tiết các mô hình cơ sở dữ liệu SQLAlchemy.
+* **[docs/models.md](docs/models.md)** - ERD and detailed SQLAlchemy database models.
 
 ### 🌐 Technology Ecosystem Docs
 | Technology | Link |
