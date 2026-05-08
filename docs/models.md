@@ -277,6 +277,17 @@ erDiagram
         datetime updated_at
     }
 
+    TASK_ACTIVITY {
+        string id PK
+        string task_id FK
+        string user_id FK
+        string field_changed
+        string old_value
+        string new_value
+        datetime created_at
+        datetime updated_at
+    }
+
     %% Relationships
     USER ||--o{ TEAM : "owns (owner_id)"
     USER ||--o{ NOTIFICATION : "has"
@@ -321,6 +332,9 @@ erDiagram
     TASK ||--o{ RISK_SNAPSHOT : "has_risk_snapshots"
     TASK ||--o{ AGENT_OUTREACH : "has_outreaches"
     TASK ||--o{ EVENT : "associated_events"
+    TASK ||--o{ TASK_ACTIVITY : "has_activities"
+
+    USER ||--o{ TASK_ACTIVITY : "performs_activities"
 
     EVENT ||--o{ EVENT_PARTICIPANT : "has"
     TEAM_MEMBER ||--o{ EVENT_PARTICIPANT : "has"
@@ -622,6 +636,18 @@ Lịch sử Agent chủ động tương tác ra bên ngoài hệ thống với n
   - `outreach_type` (`String(50)`): Loại tiếp cận (`missing_estimate`, `stale_update`).
   - `channel` (`String(50)`, default `"email"`): Kênh tương tác tiếp cận (ví dụ: `email`, `slack`).
   - `sent_at` (`DateTime`): Thời điểm gửi tiếp cận thực tế.
+- **Quan hệ:**
+  - `task` (Quan hệ N-1 với `Task`).
+  - `user` (Quan hệ N-1 với `User`).
+
+#### 21. [TaskActivity](file:///d:/Dev%20projects/Agentick-BE/app/model/task_activity.py) (Bảng `task_activity`)
+Ghi nhận lịch sử thay đổi các trường dữ liệu của Task bởi người dùng.
+- **Trường dữ liệu:**
+  - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`, tự động xóa khi Task bị xóa (`ondelete="CASCADE"`), đánh chỉ mục (`index=True`).
+  - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` thực hiện thay đổi.
+  - `field_changed` (`String(50)`): Tên trường dữ liệu thay đổi.
+  - `old_value` (`String(255)`, nullable): Giá trị cũ trước khi thay đổi.
+  - `new_value` (`String(255)`, nullable): Giá trị mới sau khi thay đổi.
 - **Quan hệ:**
   - `task` (Quan hệ N-1 với `Task`).
   - `user` (Quan hệ N-1 với `User`).

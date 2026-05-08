@@ -1,99 +1,98 @@
-# 🤖 Hướng dẫn cấu hình AI Agent & Opik Observability
+# 🤖 AI Agent & Opik Observability Configuration Guide
 
-Tài liệu này hướng dẫn chi tiết cách thiết lập, cấu hình và giám sát **AI Agent** trong dự án **Agentick Backend** sử dụng **OpenRouter** và **Opik Observability (Traces, Spans & Agent Playground)**.
+This document provides a detailed guide on how to set up, configure, and monitor the **AI Agent** within the **Agentick Backend** project using **OpenRouter** and **Opik Observability (Traces, Spans & Agent Playground)**.
 
 ---
 
-## 1. Cấu hình AI Agent với OpenRouter
+## 1. Configuring the AI Agent with OpenRouter
 
-Dự án Agentick sử dụng **OpenRouter** để gọi động tới các mô hình ngôn ngữ lớn (LLM), ưu tiên mô hình mã nguồn mở miễn phí `openai/gpt-oss-120b:free`.
+The Agentick project utilizes **OpenRouter** to dynamically invoke Large Language Models (LLMs), prioritizing the free open-source model `openai/gpt-oss-120b:free`.
 
-### Thiết lập biến môi trường `.env`
-Thêm các biến môi trường sau vào cuối file `.env` của bạn:
+### Environment Variable Setup `.env`
+Add the following environment variables to the end of your `.env` file:
 ```env
-# --- CẤU HÌNH AI AGENT (OPENROUTER) ---
+# --- AI AGENT CONFIGURATION (OPENROUTER) ---
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=openai/gpt-oss-120b:free
 ```
 
-### Chạy thử nghiệm OpenRouter độc lập
-Để kiểm tra kết nối tới OpenRouter đã hoạt động chính xác chưa, bạn chạy script thử nghiệm độc lập sau:
+### Running the Standalone OpenRouter Test
+To verify if your connection to OpenRouter is working correctly, run the following standalone test script:
 ```bash
 uv run scratch/test_openrouter.py
 ```
-*Script sẽ tự động nạp `.env` và gọi thử nghiệm tới OpenRouter.*
+*The script will automatically load the `.env` variables and make a test call to OpenRouter.*
 
 ---
 
-## 2. Cấu hình Giám sát (LLM Observability) với Opik
+## 2. Configuring LLM Observability with Opik
 
-**Opik** là nền tảng giám sát và tối ưu hóa hiệu suất LLM hàng đầu thế giới của Comet, giúp theo dõi chi tiết toàn bộ chu trình cuộc gọi (Trace) và hành động gọi tool (Spans) của Agent.
+**Opik** is a leading LLM observability and performance optimization platform by Comet. It helps track the full lifecycle of LLM calls (Traces) and individual tool invocation actions (Spans) of the Agent in detail.
 
-### Các biến môi trường của Opik
-Cấu hình các dòng sau vào file `.env`:
+### Opik Environment Variables
+Configure the following lines in your `.env` file:
 ```env
-# --- CẤU HÌNH OPIK LLM OBSERVABILITY ---
+# --- OPIK LLM OBSERVABILITY CONFIGURATION ---
 OPIK_API_KEY=your_opik_api_key_here
 OPIK_PROJECT_NAME=Agentick
 ```
 
-### Bước 1: Đăng nhập và cấu hình Opik
-Chạy lệnh sau tại thư mục dự án và làm theo hướng dẫn trên terminal để liên kết tài khoản Opik của bạn:
+### Step 1: Login and Configure Opik
+Run the following command in the project root and follow the terminal instructions to link your Opik account:
 ```bash
 uv run opik configure
 ```
-*Nhập khóa API Key từ tài khoản Opik của bạn (mục Settings của Opik).*
+*Enter the API Key from your Opik account (found under Opik Settings).*
 
-### Bước 2: Kích hoạt Agent Playground (Kết nối Tunnel)
-Để sử dụng **Agent Playground** trực quan trên giao diện Web của Opik (cho phép chat thử nghiệm, tinh chỉnh prompt và thay đổi model trực tuyến), bạn cần mở một đường dẫn an toàn (tunnel) kết nối ngược từ Opik Cloud xuống server local của bạn.
+### Step 2: Activating the Agent Playground (Tunnel Connection)
+To use the interactive **Agent Playground** on Opik's Web interface (which allows you to chat, fine-tune prompts, and switch models online), you need to establish a secure tunnel connection from Opik Cloud back to your local server.
 
-Chạy lệnh sau trong PowerShell hoặc Terminal mới để khởi chạy server kèm tunnel:
+Run the following command in a new PowerShell or Terminal window to launch the server with the tunnel:
 ```bash
 uv run opik endpoint --project "Agentick" -- uv run uvicorn app.main:app --port 8000 --reload
 ```
-**Kết quả:** Giao diện Opik Web sẽ hiển thị trạng thái **Status: Paired ✔ (Connected)**. Bạn có thể bấm chat và thử nghiệm prompt trực tiếp trên trình duyệt!
+**Result:** The Opik Web interface will display the status **Status: Paired ✔ (Connected)**. You can now chat and experiment with prompts directly in the browser!
 
 ---
 
-## 3. Cách thức hoạt động trong Code
+## 3. How It Works in Code
 
-### Đăng ký Decorator `@track`
-Trong tệp [agent_service.py](file:///d:/Dev%20projects/Agentick-BE/app/services/agent_service.py), các decorator `@track` của Opik đã được tích hợp sẵn:
+### Registering the `@track` Decorator
+In the file [agent_service.py](file:///d:/Dev%20projects/Agentick-BE/app/services/agent_service.py), Opik `@track` decorators are pre-integrated:
 
-* **Trace cha (Điểm bắt đầu)**: Hàm `run_agent()` được bọc bằng `@track(entrypoint=True, name="run_agent_loop", project_name="Agentick")`.
-* **Span con (Thực thi Tool)**: Hàm `execute_tool()` được bọc bằng `@track(name="execute_tool")` để ghi lại lịch sử gọi hàm tạo/sửa đổi Task trong cơ sở dữ liệu.
+* **Parent Trace (Entry Point)**: The `run_agent()` function is wrapped with `@track(entrypoint=True, name="run_agent_loop", project_name="Agentick")`.
+* **Child Span (Tool Execution)**: The `execute_tool()` function is wrapped with `@track(name="execute_tool")` to log tool executions that create or modify tasks in the database.
 
-Khi gọi API `/api/v1/agent/chat` hoặc chạy thử nghiệm, Opik sẽ vẽ lại **sơ đồ cây (Span Tree)** tuyệt đẹp giúp bạn biết chính xác thời gian xử lý, chi phí token và kết quả gọi Tool.
+When invoking the `/api/v1/agent/chat` API or running tests, Opik automatically visualizes a **Span Tree** showing processing duration, token costs, and tool execution results.
 
 ---
 
-## 4. Triết lý Thiết kế & Tối ưu hóa Agent (Theo chuẩn Anthropic: Building Effective Agents)
+## 4. Agent Design Philosophy & Optimization (Based on Anthropic's "Building Effective Agents")
 
-Hệ thống Agent trong **Agentick** được thiết kế, tối ưu hóa và vận hành dựa trên các nguyên tắc thực chiến tiên tiến nhất từ Anthropic nhằm đảm bảo tính tin cậy cao, hiệu năng vượt trội và tiết kiệm chi phí trong môi trường Production.
+The Agent system in **Agentick** is designed, optimized, and operated according to industry-leading principles from Anthropic to ensure high reliability, exceptional performance, and cost efficiency in production environments.
 
-### 4.1. Giữ tính Đơn giản (Simplicity Over Heavy Frameworks)
-* **Quy tắc Anthropic:** Tránh sử dụng các Agent Framework cồng kềnh (như LangChain, CrewAI) khi không cần thiết, vì chúng tạo ra các tầng trừu tượng che giấu Prompt thực tế và gây khó khăn khi debug.
-* **Cách Agentick áp dụng:** 
-  * Chúng ta tự xây dựng ReAct loop và kết nối trực tiếp OpenRouter qua thư viện `httpx` tại `CustomAgent`.
-  * **Chương trình hóa điều kiện (Programmatic Gates):** Với tính năng **Agent Outreach**, thay vì bắt LLM tự suy luận xem có nên gửi email hay không (gây tốn token và không chính xác), chúng ta sử dụng code Python thuần trong `AgentOutreachService` để kiểm tra điều kiện (Task ở trạng thái todo/done, deadline xa hơn 3 ngày, đã gửi email trong 24h, hay thành viên hoạt động trong 2h gần nhất). LLM chỉ được gọi duy nhất ở bước cuối cùng khi thực sự cần trí tuệ nhân tạo để viết nội dung email cá nhân hóa.
+### 4.1. Simplicity Over Heavy Frameworks
+* **Anthropic Rule**: Avoid using heavy agent frameworks (such as LangChain or CrewAI) when not necessary, as they introduce abstract layers that obscure actual prompts and make debugging difficult.
+* **How Agentick Applies This**:
+  * We build our own ReAct loop and directly connect to OpenRouter using the `httpx` library in `CustomAgent`.
+  * **Programmatic Gates**: With the **Agent Outreach** feature, instead of asking the LLM to reason whether it should send an email (which wastes tokens and is error-prone), we use pure Python code in `AgentOutreachService` to evaluate conditions (e.g., check if the task is in todo/done status, if the deadline is further than 3 days, if an email was sent in the last 24 hours, or if the member has been active in the last 2 hours). The LLM is only called at the final step when artificial intelligence is genuinely required to write personalized email copy.
 
-### 4.2. Tối ưu hóa ACI (Agent-Computer Interface) & Thiết kế Chống lỗi (Poka-Yoke)
-* **Quy tắc Anthropic:** Định nghĩa Tools (JSON Schema) cho LLM cần được đầu tư kỹ lưỡng giống như viết Docstring cho một lập trình viên Junior. Tối ưu hóa tham số để LLM không bao giờ truyền sai dữ liệu (Poka-yoke).
-* **Cách Agentick áp dụng:**
-  * Chúng ta rà soát và cấu trúc lại toàn bộ danh mục Tool trong [task_tools.py](file:///d:/Dev%20projects/Agentick-BE/app/tools/task_tools.py).
-  * Khắc phục triệt để lỗi thiếu trường bắt buộc bằng cách đưa `start_date` và `due_date` trực tiếp vào schema của `create_task` với chỉ dẫn định dạng **ISO-8601** rõ ràng.
-  * Chỉ định rõ ràng kiểu định dạng **UUID tuyệt đối** cho các trường khóa ngoại (`status_id`, `priority_id`, `type_id`, `project_id`) để tránh LLM tự suy đoán (hallucinate) hoặc truyền chuỗi ký tự tự do.
-  * Tích hợp thêm trường `estimated_hours` trực tiếp vào Tool để AI chủ động ghi nhận thời gian ước lượng khi tạo Task, làm cơ sở dữ liệu ban đầu cho hệ thống dự báo rủi ro trễ hạn.
+### 4.2. Agent-Computer Interface (ACI) Optimization & Error-Proofing (Poka-Yoke)
+* **Anthropic Rule**: Define tools (JSON Schema) for the LLM with the same meticulous care as writing documentation for a junior developer. Optimize parameters to ensure the LLM never passes incorrect data types (Poka-yoke).
+* **How Agentick Applies This**:
+  * We reviewed and restructured the entire tool catalog in [task_tools.py](file:///d:/Dev%20projects/Agentick-BE/app/tools/task_tools.py).
+  * Resolved missing required field errors by including `start_date` and `due_date` directly in the `create_task` schema with explicit **ISO-8601** format instructions.
+  * Explicitly specified **absolute UUIDv4 format** for foreign key fields (`status_id`, `priority_id`, `type_id`, `project_id`) to prevent the LLM from hallucinating or passing arbitrary text strings.
+  * Integrated the `estimated_hours` field directly into the Tool schema, encouraging the AI to actively log estimated duration upon task creation to serve as baseline data for the deadline risk prediction system.
 
-### 4.3. Đề cao tính Minh bạch (Prioritize Transparency)
-* **Quy tắc Anthropic:** Giúp người dùng hiểu được các bước lập kế hoạch và suy nghĩ của Agent để xây dựng lòng tin lâu dài.
-* **Cách Agentick áp dụng:**
-  * Toàn bộ chuỗi suy nghĩ (Thought) và hành động gọi Tool đều được ghi lại tự động thông qua decorator `@track` của Opik và lưu trực tiếp trong cơ sở dữ liệu.
-  * Các tín hiệu đánh giá rủi ro được lưu trữ chi tiết dưới dạng JSON trong trường `signals` của bảng `risk_snapshot` để hiển thị trực tiếp lên Frontend cho PM biết rõ *tại sao* Agent đánh giá Task này có rủi ro cao.
+### 4.3. Prioritizing Transparency
+* **Anthropic Rule**: Help users understand the planning steps and thought process of the Agent to build long-term trust.
+* **How Agentick Applies This**:
+  * The entire thought process (Thoughts) and tool execution actions are automatically captured using Opik's `@track` decorator and saved directly in the database.
+  * Detailed risk signals are stored as JSON in the `signals` field of the `risk_snapshot` table to be displayed on the frontend, showing project managers exactly *why* the Agent flagged a task as high risk.
 
-### 4.4. Mô hình Đánh giá - Tối ưu (Evaluator-Optimizer Workflow)
-* **Quy tắc Anthropic:** Áp dụng mô hình một LLM sinh kết quả (Generator) và một LLM (hoặc dữ liệu phản hồi) kiểm tra tinh chỉnh (Evaluator) để nâng cao chất lượng đầu ra một cách vượt bậc.
-* **Cách Agentick áp dụng:**
-  * Trong lộ trình phân tích rủi ro trễ hạn nâng cao, Agentick sử dụng dữ liệu sai số thực tế giữa ước lượng ban đầu (`estimated_hours`) và thực tế thực thi (`actual_hours`) từ lịch sử hoạt động để làm Feedback Loop phản hồi cho Agent tinh chỉnh lại điểm số rủi ro (`risk_score`) trước khi đưa ra cảnh báo.
-
+### 4.4. Evaluator-Optimizer Workflow
+* **Anthropic Rule**: Use a generator LLM to produce outputs and an evaluator LLM (or feedback loop) to check and refine results, significantly increasing output quality.
+* **How Agentick Applies This**:
+  * In the advanced deadline risk analysis workflow, Agentick leverages historical execution data—specifically the variance between initial estimates (`estimated_hours`) and actual execution time (`actual_hours`)—as a feedback loop to let the Agent calibrate the `risk_score` before generating warnings.

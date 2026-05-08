@@ -71,35 +71,49 @@ class ProjectService(BaseService):
             [
                 {
                     "project_id": project_id,
-                    "name": "To Do",
-                    "color": "#808080",
+                    "name": "Backlog",
+                    "color": "#8da4c0",
                     "order": 0,
                     "is_completed": False,
                 },
                 {
                     "project_id": project_id,
-                    "name": "In Progress",
-                    "color": "#0066CC",
+                    "name": "To Do",
+                    "color": "#6c8ebf",
                     "order": 1,
                     "is_completed": False,
                 },
                 {
                     "project_id": project_id,
-                    "name": "In Review",
-                    "color": "#FF9900",
+                    "name": "In Progress",
+                    "color": "#3BA6F1",
                     "order": 2,
                     "is_completed": False,
                 },
                 {
                     "project_id": project_id,
-                    "name": "Done",
-                    "color": "#00CC00",
+                    "name": "In Review",
+                    "color": "#fdba74",
                     "order": 3,
                     "is_completed": False,
                 },
+                {
+                    "project_id": project_id,
+                    "name": "Blocked",
+                    "color": "#fb7185",
+                    "order": 4,
+                    "is_completed": False,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Done",
+                    "color": "#97D6AE",
+                    "order": 5,
+                    "is_completed": False,
+                },
             ],
-            default_index=0,
-            completed_index=3,
+            default_index=1,
+            completed_index=5,
         )
         for status in statuses:
             self._task_status_repository.create(status)
@@ -109,31 +123,38 @@ class ProjectService(BaseService):
             [
                 {
                     "project_id": project_id,
-                    "name": "Feature",
-                    "color": "#0066CC",
-                    "icon": "star",
+                    "name": "Task",
+                    "color": "#6c8ebf",
+                    "icon": "list-checks",
                     "order": 0,
                 },
                 {
                     "project_id": project_id,
-                    "name": "Bug",
-                    "color": "#DD0000",
-                    "icon": "bug",
+                    "name": "Feature",
+                    "color": "#3BA6F1",
+                    "icon": "sparkles",
                     "order": 1,
                 },
                 {
                     "project_id": project_id,
-                    "name": "Improvement",
-                    "color": "#FF9900",
-                    "icon": "zap",
+                    "name": "Bug",
+                    "color": "#fb7185",
+                    "icon": "bug",
                     "order": 2,
                 },
                 {
                     "project_id": project_id,
-                    "name": "Task",
-                    "color": "#6600CC",
-                    "icon": "check",
+                    "name": "Epic",
+                    "color": "#a78bfa",
+                    "icon": "layers-3",
                     "order": 3,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Sub-task",
+                    "color": "#97D6AE",
+                    "icon": "subtitles",
+                    "order": 4,
                 },
             ],
             default_index=0,
@@ -146,34 +167,41 @@ class ProjectService(BaseService):
             [
                 {
                     "project_id": project_id,
-                    "name": "Low",
-                    "color": "#00CC00",
+                    "name": "Lowest",
+                    "color": "#8da4c0",
                     "level": 0,
                     "order": 0,
                 },
                 {
                     "project_id": project_id,
-                    "name": "Medium",
-                    "color": "#FFCC00",
+                    "name": "Low",
+                    "color": "#97D6AE",
                     "level": 1,
                     "order": 1,
                 },
                 {
                     "project_id": project_id,
-                    "name": "High",
-                    "color": "#FF6600",
+                    "name": "Medium",
+                    "color": "#3BA6F1",
                     "level": 2,
                     "order": 2,
                 },
                 {
                     "project_id": project_id,
-                    "name": "Urgent",
-                    "color": "#DD0000",
+                    "name": "High",
+                    "color": "#fdba74",
                     "level": 3,
                     "order": 3,
                 },
+                {
+                    "project_id": project_id,
+                    "name": "Highest",
+                    "color": "#fb7185",
+                    "level": 4,
+                    "order": 4,
+                },
             ],
-            default_index=0,
+            default_index=2,
         )
         for priority in priorities:
             self._task_priority_repository.create(priority)
@@ -222,6 +250,26 @@ class ProjectService(BaseService):
         self._ensure_user_in_team(
             project.team_id, current_user.id, allow_roles={"owner", "manager"}
         )
+
+        # Soft-delete all tasks of this project and delete their calendar events
+        with self._repository.session_factory() as session:
+            from app.model.task import Task
+            from app.model.event import Event
+
+            # Find all tasks belonging to this project
+            tasks = (
+                session.query(Task)
+                .filter(Task.project_id == project_id, Task.is_deleted.is_(False))
+                .all()
+            )
+            for task in tasks:
+                task.is_deleted = True
+                # Delete events associated with this task
+                session.query(Event).filter(Event.task_id == task.id).delete(
+                    synchronize_session=False
+                )
+            session.commit()
+
         return self._repository.update_attr(project_id, "is_deleted", True)
 
     def get_my_projects(self, user_id: str):

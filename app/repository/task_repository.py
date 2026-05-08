@@ -91,12 +91,14 @@ class TaskRepository(BaseRepository):
             page_size = data.get("page_size", settings.PAGE_SIZE)
 
             filter_options = dict_to_sqlalchemy_filter_options(self.model, data)
-            query = session.query(self.model)
+            query = (
+                session.query(self.model)
+                .join(Project, Project.id == self.model.project_id)
+                .filter(Project.is_deleted.is_(False))
+            )
 
             if team_id:
-                query = query.join(Project, Project.id == self.model.project_id).filter(
-                    Project.team_id == team_id
-                )
+                query = query.filter(Project.team_id == team_id)
 
             if eager:
                 for eager_attr in getattr(self.model, "eagers", []):

@@ -7,7 +7,7 @@ class TaskPriorityBase(BaseModel):
     project_id: str
     name: str = Field(..., min_length=1, max_length=255)
     color: str = Field(..., pattern=r"^#[0-9A-Fa-f]{6}$")  # Hex color
-    level: int = Field(..., ge=0, le=3)  # 0 (low) to 3 (urgent)
+    level: int = Field(..., ge=0, le=4)  # 0 (lowest) to 4 (highest)
     order: float = Field(..., ge=0)
     is_default: bool = False
 
@@ -19,7 +19,7 @@ class TaskPriorityCreate(TaskPriorityBase):
 class TaskPriorityUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
-    level: Optional[int] = Field(None, ge=0, le=3)
+    level: Optional[int] = Field(None, ge=0, le=4)
     order: Optional[float] = Field(None, ge=0)
     is_default: Optional[bool] = None
 
