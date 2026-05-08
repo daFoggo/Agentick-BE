@@ -13,12 +13,24 @@ class TaskService(BaseService):
                 from app.model.project_member import ProjectMember
                 from app.model.project import Project
                 from app.model.team import Team
-                from app.model.notification import Notification, NotificationType, NotificationStatus
+                from app.model.notification import (
+                    Notification,
+                    NotificationType,
+                    NotificationStatus,
+                )
 
                 project = session.query(Project).filter_by(id=result.project_id).first()
-                team = session.query(Team).filter_by(id=project.team_id).first() if project else None
+                team = (
+                    session.query(Team).filter_by(id=project.team_id).first()
+                    if project
+                    else None
+                )
 
-                members = session.query(ProjectMember).filter(ProjectMember.id.in_(schema.assignee_ids)).all()
+                members = (
+                    session.query(ProjectMember)
+                    .filter(ProjectMember.id.in_(schema.assignee_ids))
+                    .all()
+                )
                 for member in members:
                     notification = Notification(
                         user_id=member.user_id,
@@ -36,7 +48,7 @@ class TaskService(BaseService):
                             "project_name": project.name if project else None,
                             "team_id": project.team_id if project else None,
                             "team_name": team.name if team else None,
-                        }
+                        },
                     )
                     session.add(notification)
                 session.commit()
@@ -48,9 +60,9 @@ class TaskService(BaseService):
             old_task = session.query(self._repository.model).filter_by(id=id).first()
             if old_task:
                 old_assignee_ids = {a.id for a in old_task.assignees}
-                
+
         result = super().patch(id, schema)
-        
+
         if hasattr(schema, "assignee_ids") and schema.assignee_ids is not None:
             new_assignee_ids = set(schema.assignee_ids)
             added_ids = new_assignee_ids - old_assignee_ids
@@ -59,12 +71,26 @@ class TaskService(BaseService):
                     from app.model.project_member import ProjectMember
                     from app.model.project import Project
                     from app.model.team import Team
-                    from app.model.notification import Notification, NotificationType, NotificationStatus
+                    from app.model.notification import (
+                        Notification,
+                        NotificationType,
+                        NotificationStatus,
+                    )
 
-                    project = session.query(Project).filter_by(id=result.project_id).first()
-                    team = session.query(Team).filter_by(id=project.team_id).first() if project else None
+                    project = (
+                        session.query(Project).filter_by(id=result.project_id).first()
+                    )
+                    team = (
+                        session.query(Team).filter_by(id=project.team_id).first()
+                        if project
+                        else None
+                    )
 
-                    members = session.query(ProjectMember).filter(ProjectMember.id.in_(added_ids)).all()
+                    members = (
+                        session.query(ProjectMember)
+                        .filter(ProjectMember.id.in_(added_ids))
+                        .all()
+                    )
                     for member in members:
                         notification = Notification(
                             user_id=member.user_id,
@@ -82,7 +108,7 @@ class TaskService(BaseService):
                                 "project_name": project.name if project else None,
                                 "team_id": project.team_id if project else None,
                                 "team_name": team.name if team else None,
-                            }
+                            },
                         )
                         session.add(notification)
                     session.commit()
