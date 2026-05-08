@@ -1,0 +1,40 @@
+from datetime import datetime, date
+from typing import TYPE_CHECKING
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.model.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.model.task import Task
+    from app.model.user import User
+
+
+class TaskTimeLog(BaseModel):
+    __tablename__ = "task_time_log"
+
+    task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("task.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("user.id"), nullable=False
+    )
+
+    log_type: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # 'timer' | 'manual'
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    hours: Mapped[float] = mapped_column(Float, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    logged_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    # Relationships
+    task: Mapped["Task"] = relationship("Task")
+    user: Mapped["User"] = relationship("User")

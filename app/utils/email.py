@@ -1,6 +1,6 @@
+import logging
 import smtplib
 from email.message import EmailMessage
-import logging
 
 from app.core.config import configs
 
@@ -59,4 +59,52 @@ def send_invitation_email(
         logger.info(f"Successfully sent invitation email to {email_to}")
     except Exception as e:
         logger.error(f"Failed to send email to {email_to}: {e}")
+        raise e
+
+
+def send_agent_outreach_email(
+    email_to: str,
+    subject: str,
+    body_content: str,
+    task_link: str,
+) -> None:
+    if not configs.SMTP_USER or not configs.SMTP_PASSWORD:
+        logger.warning(
+            f"SMTP configurations are missing. Mock sending outreach email to {email_to} with content:\n{body_content}"
+        )
+        return
+
+    html_content = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-w-md; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                <h2 style="color: #2563eb;">Action Required</h2>
+                <div style="white-space: pre-wrap; margin-bottom: 20px;">{body_content}</div>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{task_link}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">
+                        Update Now
+                    </a>
+                </div>
+                <p>Thanks,<br>Your {configs.EMAILS_FROM_NAME} Assistant</p>
+            </div>
+        </body>
+    </html>
+    """
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"{configs.EMAILS_FROM_NAME} <{configs.SMTP_USER}>"
+    msg["To"] = email_to
+    msg.set_content(f"{body_content}\n\nUpdate here: {task_link}")
+    msg.add_alternative(html_content, subtype="html")
+
+    try:
+        server = smtplib.SMTP(configs.SMTP_HOST, configs.SMTP_PORT)
+        server.starttls()
+        server.login(configs.SMTP_USER, configs.SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        logger.info(f"Successfully sent agent outreach email to {email_to}")
+    except Exception as e:
+        logger.error(f"Failed to send outreach email to {email_to}: {e}")
         raise e

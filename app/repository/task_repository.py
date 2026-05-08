@@ -66,7 +66,7 @@ class TaskRepository(BaseRepository):
 
         with self.session_factory() as session:
             from app.model.project import Project
-            from app.util.query_builder import dict_to_sqlalchemy_filter_options
+            from app.utils.query_builder import dict_to_sqlalchemy_filter_options
             from sqlalchemy.orm import joinedload
             from app.core.config import settings
 
