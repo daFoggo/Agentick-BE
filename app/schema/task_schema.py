@@ -63,6 +63,7 @@ class TaskUpdate(BaseModel):
     estimated_hours: Optional[float] = None
     actual_hours: Optional[float] = None
 
+
 class TaskRead(ModelBaseInfo):
     project_id: str
     parent_id: Optional[str] = None
@@ -103,8 +104,10 @@ class TaskFind(FindBase):
 
 # ── Dashboard: Task Stats ─────────────────────────────────────────────────────
 
+
 class TaskStatItem(BaseModel):
     """Một nhóm thống kê (priority / status / type) với số lượng task."""
+
     id: str
     name: str
     color: str
@@ -115,24 +118,28 @@ class TaskStatItem(BaseModel):
 
 class ProjectTaskStats(BaseModel):
     """Response cho GET /projects/{project_id}/tasks/stats"""
+
     by_priority: List[TaskStatItem]
     by_status: List[TaskStatItem]
     by_type: List[TaskStatItem]
-    period: str        # "weekly" | "monthly"
-    date_from: str     # ISO date string
-    date_to: str       # ISO date string
+    period: str  # "weekly" | "monthly"
+    date_from: str  # ISO date string
+    date_to: str  # ISO date string
 
 
 # ── Dashboard: Member Workload ────────────────────────────────────────────────
 
+
 class WorkloadDataPoint(BaseModel):
     """Số task của một member trong một ngày cụ thể."""
-    date: str          # "YYYY-MM-DD"
+
+    date: str  # "YYYY-MM-DD"
     task_count: int
 
 
 class MemberWorkload(BaseModel):
     """Workload series của một member trong project."""
+
     user_id: str
     name: str
     avatar_url: Optional[str] = None
@@ -143,7 +150,8 @@ class MemberWorkload(BaseModel):
 
 class ProjectWorkloadResponse(BaseModel):
     """Response cho GET /projects/{project_id}/members/workload"""
+
     members: List[MemberWorkload]
-    period: str        # "weekly" | "monthly"
+    period: str  # "weekly" | "monthly"
     date_from: str
     date_to: str

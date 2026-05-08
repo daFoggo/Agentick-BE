@@ -1,14 +1,16 @@
 from contextlib import nullcontext
+
 from fastapi import APIRouter, Depends
+
 from app.core.dependencies import get_current_active_user, get_db
 from app.model.user import User
 from app.repository.task_repository import TaskRepository
-from app.services.task_service import TaskService
-from app.services.agent_service import AgentService
 from app.schema.agent_schema import AgentChatRequest, AgentChatResponse
 from app.schema.base_schema import ResponseSchema
+from app.services.agent_service import AgentService
+from app.services.task_service import TaskService
 
-router = APIRouter(prefix="/agent", tags=["AI Agent"])
+router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 def get_agent_service(db=Depends(get_db)) -> AgentService:

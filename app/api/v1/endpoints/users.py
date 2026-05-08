@@ -110,9 +110,8 @@ def get_my_stats(
 
     # Query: task_id của các task được assign cho user
     # Không dùng .subquery() — truyền thẳng query object vào .in_() để tránh SAWarning
-    user_task_ids_q = (
-        db.query(task_assignee.c.task_id)
-        .filter(task_assignee.c.project_member_id.in_(user_member_ids))
+    user_task_ids_q = db.query(task_assignee.c.task_id).filter(
+        task_assignee.c.project_member_id.in_(user_member_ids)
     )
 
     # --- 1. tasks_completed ---
@@ -131,13 +130,10 @@ def get_my_stats(
 
     # --- 2. collaborated_with ---
     # Query: task_id của user được cập nhật trong period
-    active_task_ids_q = (
-        db.query(Task.id)
-        .filter(
-            Task.id.in_(user_task_ids_q),
-            Task.updated_at >= since,
-            Task.is_deleted.is_(False),
-        )
+    active_task_ids_q = db.query(Task.id).filter(
+        Task.id.in_(user_task_ids_q),
+        Task.updated_at >= since,
+        Task.is_deleted.is_(False),
     )
 
     # Lấy project_member_id khác (không phải của user hiện tại) trên các task active

@@ -247,7 +247,10 @@ def get_project_gantt(
     return ResponseSchema(data=result)
 
 
-@router.get("/{project_id}/members/workload", response_model=ResponseSchema[ProjectWorkloadResponse])
+@router.get(
+    "/{project_id}/members/workload",
+    response_model=ResponseSchema[ProjectWorkloadResponse],
+)
 def get_project_member_workload(
     project_id: str,
     period: Literal["weekly", "monthly"] = Query(default="weekly"),
@@ -269,6 +272,7 @@ def get_project_member_workload(
 
     # Lấy tất cả member của project (join với user để lấy thông tin)
     from sqlalchemy.orm import joinedload
+
     members = (
         db.query(ProjectMember)
         .options(joinedload(ProjectMember.user))
@@ -301,7 +305,10 @@ def get_project_member_workload(
                 Task.is_deleted.is_(False),
                 Task.is_archived.is_(False),
                 # Lấy task done: is_completed=True HOẶC tên status là "Done" (fallback)
-                (TaskStatus.is_completed.is_(True) | (func.lower(TaskStatus.name) == "done")),
+                (
+                    TaskStatus.is_completed.is_(True)
+                    | (func.lower(TaskStatus.name) == "done")
+                ),
                 Task.updated_at >= date_from,
                 Task.updated_at < date_to,
             )
@@ -317,7 +324,7 @@ def get_project_member_workload(
         # Dùng local date (UTC+7) để tránh lệch ngày
         vn_offset = timedelta(hours=7)
         local_start = (date_from + vn_offset).date()
-        local_end   = (date_to + vn_offset).date() + timedelta(days=1)  # inclusive today
+        local_end = (date_to + vn_offset).date() + timedelta(days=1)  # inclusive today
 
         series: list[WorkloadDataPoint] = []
         current_day = local_start

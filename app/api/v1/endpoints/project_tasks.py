@@ -4,10 +4,12 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.core.dependencies import get_current_active_user, get_db
 from app.core.exceptions import NotFoundError
 from app.model.user import User
+from app.model.task_activity import TaskActivity
 from app.model.task import Task
 from app.model.task_status import TaskStatus
 from app.model.task_type import TaskType
@@ -15,8 +17,12 @@ from app.model.task_priority import TaskPriority
 from app.repository.task_repository import TaskRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.task_schema import (
-    TaskCreate, TaskFind, TaskRead, TaskUpdate,
-    ProjectTaskStats, TaskStatItem,
+    TaskCreate,
+    TaskFind,
+    TaskRead,
+    TaskUpdate,
+    ProjectTaskStats,
+    TaskStatItem,
 )
 from app.services.task_service import TaskService
 
@@ -83,18 +89,22 @@ def get_project_task_stats(
         Task.is_deleted.is_(False),
         Task.is_archived.is_(False),
         Task.updated_at >= date_from,
-        Task.updated_at < date_to,   # upper bound: loại task được update sau "bây giờ"
+        Task.updated_at < date_to,  # upper bound: loại task được update sau "bây giờ"
     ]
 
     # ── By Priority ─────────────────────────────────────────────────────────────────────────
     priority_rows = (
-        db.query(TaskPriority.id, TaskPriority.name, TaskPriority.color, func.count(Task.id))
+        db.query(
+            TaskPriority.id, TaskPriority.name, TaskPriority.color, func.count(Task.id)
+        )
         .join(Task, Task.priority_id == TaskPriority.id)
         .filter(*shared_filters)
         .group_by(TaskPriority.id, TaskPriority.name, TaskPriority.color)
         .all()
     )
-    by_priority = [TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3]) for r in priority_rows]
+    by_priority = [
+        TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3]) for r in priority_rows
+    ]
 
     # ── By Status ──────────────────────────────────────────────────────────────────────────
     status_rows = (
@@ -104,7 +114,9 @@ def get_project_task_stats(
         .group_by(TaskStatus.id, TaskStatus.name, TaskStatus.color)
         .all()
     )
-    by_status = [TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3]) for r in status_rows]
+    by_status = [
+        TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3]) for r in status_rows
+    ]
 
     # ── By Type ───────────────────────────────────────────────────────────────────────────
     type_rows = (
@@ -114,7 +126,9 @@ def get_project_task_stats(
         .group_by(TaskType.id, TaskType.name, TaskType.color)
         .all()
     )
-    by_type = [TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3]) for r in type_rows]
+    by_type = [
+        TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3]) for r in type_rows
+    ]
 
     return ResponseSchema(
         data=ProjectTaskStats(
@@ -128,9 +142,6 @@ def get_project_task_stats(
         message="Task stats fetched successfully",
     )
 
-
-from app.model.task_activity import TaskActivity
-from sqlalchemy.orm import joinedload
 
 @router.get("/recent-updates", response_model=ResponseSchema[list[dict]])
 def get_recent_status_updates(
@@ -147,17 +158,14 @@ def get_recent_status_updates(
         db.query(TaskActivity)
         .join(Task, Task.id == TaskActivity.task_id)
         .filter(Task.project_id == project_id)
-        .options(
-            joinedload(TaskActivity.task),
-            joinedload(TaskActivity.user)
-        )
+        .options(joinedload(TaskActivity.task), joinedload(TaskActivity.user))
         .order_by(TaskActivity.created_at.desc())
         .limit(limit)
         .all()
     )
 
     results = []
-    
+
     # Pre-fetch status names and colors to avoid N+1 queries
     status_ids = set()
     for activity in activities:
@@ -165,31 +173,39 @@ def get_recent_status_updates(
             status_ids.add(activity.old_value)
         if activity.new_value:
             status_ids.add(activity.new_value)
-            
+
     status_map = {}
     if status_ids:
         statuses = db.query(TaskStatus).filter(TaskStatus.id.in_(status_ids)).all()
         status_map = {s.id: {"name": s.name, "color": s.color} for s in statuses}
 
     for activity in activities:
-        old_status = status_map.get(activity.old_value, {}) if activity.old_value else {}
-        new_status = status_map.get(activity.new_value, {}) if activity.new_value else {}
-        
-        results.append({
-            "id": activity.id,
-            "task_id": activity.task_id,
-            "task_title": activity.task.title if activity.task else "Unknown Task",
-            "user_id": activity.user_id,
-            "user_name": activity.user.name if activity.user else "System",
-            "field_changed": activity.field_changed,
-            "old_value": activity.old_value,
-            "new_value": activity.new_value,
-            "old_status_name": old_status.get("name"),
-            "old_status_color": old_status.get("color"),
-            "new_status_name": new_status.get("name"),
-            "new_status_color": new_status.get("color"),
-            "created_at": activity.created_at.isoformat() if activity.created_at else None,
-        })
+        old_status = (
+            status_map.get(activity.old_value, {}) if activity.old_value else {}
+        )
+        new_status = (
+            status_map.get(activity.new_value, {}) if activity.new_value else {}
+        )
+
+        results.append(
+            {
+                "id": activity.id,
+                "task_id": activity.task_id,
+                "task_title": activity.task.title if activity.task else "Unknown Task",
+                "user_id": activity.user_id,
+                "user_name": activity.user.name if activity.user else "System",
+                "field_changed": activity.field_changed,
+                "old_value": activity.old_value,
+                "new_value": activity.new_value,
+                "old_status_name": old_status.get("name"),
+                "old_status_color": old_status.get("color"),
+                "new_status_name": new_status.get("name"),
+                "new_status_color": new_status.get("color"),
+                "created_at": activity.created_at.isoformat()
+                if activity.created_at
+                else None,
+            }
+        )
 
     return ResponseSchema(data=results, message="Recent updates fetched successfully")
 
@@ -231,7 +247,3 @@ def delete_project_task(
     _ensure_task_in_project(task, project_id)
     service.patch_attr(task_id, "is_deleted", True)
     return ResponseSchema(data=True, message="Task deleted successfully")
-
-
-
-

@@ -8,9 +8,8 @@ Create Date: 2026-05-07 03:04:23.287576
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0e47266203f9"
@@ -107,18 +106,19 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.add_column(
-        "event", sa.Column("event_category", sa.String(length=50), nullable=True)
+    op.execute("ALTER TABLE event ADD COLUMN IF NOT EXISTS event_category VARCHAR(50)")
+    op.execute("ALTER TABLE event DROP CONSTRAINT IF EXISTS event_task_id_fkey")
+    op.execute("ALTER TABLE event ADD COLUMN IF NOT EXISTS task_id VARCHAR(36)")
+    op.execute("ALTER TABLE event DROP CONSTRAINT IF EXISTS event_task_id_fkey_new")
+    op.execute(
+        "ALTER TABLE event ADD CONSTRAINT event_task_id_fkey FOREIGN KEY (task_id) REFERENCES task(id)"
     )
-    op.drop_constraint(op.f("event_task_id_fkey"), "event", type_="foreignkey")
-    op.create_foreign_key(None, "event", "task", ["task_id"], ["id"])
-    op.add_column("task", sa.Column("estimated_hours", sa.Float(), nullable=True))
-    op.add_column(
-        "task",
-        sa.Column("actual_hours", sa.Float(), nullable=False, server_default="0"),
+    op.execute("ALTER TABLE task ADD COLUMN IF NOT EXISTS estimated_hours FLOAT")
+    op.execute(
+        "ALTER TABLE task ADD COLUMN IF NOT EXISTS actual_hours FLOAT DEFAULT 0 NOT NULL"
     )
-    op.drop_constraint(op.f("task_assignee_id_fkey"), "task", type_="foreignkey")
-    op.drop_column("task", "assignee_id")
+    op.execute("ALTER TABLE task DROP CONSTRAINT IF EXISTS task_assignee_id_fkey")
+    op.execute("ALTER TABLE task DROP COLUMN IF EXISTS assignee_id")
     # ### end Alembic commands ###
 
 

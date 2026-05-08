@@ -30,13 +30,16 @@ class TaskRepository(BaseRepository):
             return item
 
     def update(self, id, schema, auto_commit=True, eager=False, user_id=None):
-        data = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
+        data = (
+            schema.model_dump(exclude_none=True)
+            if hasattr(schema, "model_dump")
+            else schema
+        )
         assignee_ids = data.pop("assignee_ids", None)
         with self.session_factory() as session:
             item = session.query(self.model).filter(self.model.id == id).first()
             if not item:
                 raise NotFoundError(detail=f"not found id : {id}")
-            
 
             # Check for status change to record activity
             if "status_id" in data and data["status_id"] != item.status_id and user_id:
@@ -45,7 +48,7 @@ class TaskRepository(BaseRepository):
                     user_id=user_id,
                     field_changed="status",
                     old_value=item.status_id,
-                    new_value=data["status_id"]
+                    new_value=data["status_id"],
                 )
                 session.add(activity)
 
@@ -63,6 +66,7 @@ class TaskRepository(BaseRepository):
             if auto_commit:
                 session.commit()
             return self.read_by_id(id, eager=eager)
+
     def read_by_options(self, schema, eager: bool = False):
         data = (
             schema.model_dump(exclude_none=True)
