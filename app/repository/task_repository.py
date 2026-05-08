@@ -1,6 +1,7 @@
 from app.repository.base_repository import BaseRepository
 from app.model.task import Task
 from app.model.project_member import ProjectMember
+from app.model.task_activity import TaskActivity
 from app.core.exceptions import NotFoundError
 
 
@@ -24,7 +25,7 @@ class TaskRepository(BaseRepository):
                 session.flush()
             return item
 
-    def update(self, id, schema, auto_commit=True):
+    def update(self, id, schema, auto_commit=True, eager=False, user_id=None):
         data = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
         assignee_ids = data.pop("assignee_ids", None)
         with self.session_factory() as session:
@@ -32,6 +33,17 @@ class TaskRepository(BaseRepository):
             if not item:
                 raise NotFoundError(detail=f"not found id : {id}")
             
+            # Check for status change to record activity
+            if "status_id" in data and data["status_id"] != item.status_id and user_id:
+                activity = TaskActivity(
+                    task_id=id,
+                    user_id=user_id,
+                    field_changed="status",
+                    old_value=item.status_id,
+                    new_value=data["status_id"]
+                )
+                session.add(activity)
+
             for key, value in data.items():
                 setattr(item, key, value)
             
@@ -41,8 +53,7 @@ class TaskRepository(BaseRepository):
             
             if auto_commit:
                 session.commit()
-                session.refresh(item)
-            return item
+            return self.read_by_id(id, eager=eager)
     def read_by_options(self, schema, eager: bool = False):
         data = schema.model_dump(exclude_none=True) if hasattr(schema, "model_dump") else schema
         team_id = data.pop("team_id__eq", None)

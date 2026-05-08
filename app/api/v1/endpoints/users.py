@@ -105,11 +105,11 @@ def get_my_stats(
             message="User stats fetched successfully",
         )
 
-    # Subquery: task_id của các task được assign cho user
-    user_task_ids_subq = (
+    # Query: task_id của các task được assign cho user
+    # Không dùng .subquery() — truyền thẳng query object vào .in_() để tránh SAWarning
+    user_task_ids_q = (
         db.query(task_assignee.c.task_id)
         .filter(task_assignee.c.project_member_id.in_(user_member_ids))
-        .subquery()
     )
 
     # --- 1. tasks_completed ---
@@ -118,7 +118,7 @@ def get_my_stats(
         db.query(Task)
         .join(TaskStatus, TaskStatus.id == Task.status_id)
         .filter(
-            Task.id.in_(user_task_ids_subq),
+            Task.id.in_(user_task_ids_q),
             TaskStatus.is_completed.is_(True),
             Task.updated_at >= since,
             Task.is_deleted.is_(False),
@@ -127,32 +127,30 @@ def get_my_stats(
     )
 
     # --- 2. collaborated_with ---
-    # Subquery: task_id của user được cập nhật trong period
-    active_task_ids_subq = (
+    # Query: task_id của user được cập nhật trong period
+    active_task_ids_q = (
         db.query(Task.id)
         .filter(
-            Task.id.in_(user_task_ids_subq),
+            Task.id.in_(user_task_ids_q),
             Task.updated_at >= since,
             Task.is_deleted.is_(False),
         )
-        .subquery()
     )
 
     # Lấy project_member_id khác (không phải của user hiện tại) trên các task active
-    other_member_ids_subq = (
+    other_member_ids_q = (
         db.query(task_assignee.c.project_member_id)
         .filter(
-            task_assignee.c.task_id.in_(db.query(active_task_ids_subq)),
+            task_assignee.c.task_id.in_(active_task_ids_q),
             task_assignee.c.project_member_id.not_in(user_member_ids),
         )
         .distinct()
-        .subquery()
     )
 
     # Đếm distinct user_id từ các project_member khác đó
     collaborated_with = (
         db.query(ProjectMember.user_id)
-        .filter(ProjectMember.id.in_(db.query(other_member_ids_subq)))
+        .filter(ProjectMember.id.in_(other_member_ids_q))
         .distinct()
         .count()
     )

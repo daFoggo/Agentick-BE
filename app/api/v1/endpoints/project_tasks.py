@@ -129,6 +129,71 @@ def get_project_task_stats(
     )
 
 
+from app.model.task_activity import TaskActivity
+from sqlalchemy.orm import joinedload
+
+@router.get("/recent-updates", response_model=ResponseSchema[list[dict]])
+def get_recent_status_updates(
+    project_id: str,
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: User = Depends(get_current_active_user),
+    db=Depends(get_db),
+):
+    """
+    Lấy danh sách các cập nhật trạng thái gần đây của dự án.
+    Trộn với bảng Task, User, TaskStatus để trả về dữ liệu hiển thị.
+    """
+    activities = (
+        db.query(TaskActivity)
+        .join(Task, Task.id == TaskActivity.task_id)
+        .filter(Task.project_id == project_id)
+        .options(
+            joinedload(TaskActivity.task),
+            joinedload(TaskActivity.user)
+        )
+        .order_by(TaskActivity.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    
+    # Pre-fetch status names and colors to avoid N+1 queries
+    status_ids = set()
+    for activity in activities:
+        if activity.old_value:
+            status_ids.add(activity.old_value)
+        if activity.new_value:
+            status_ids.add(activity.new_value)
+            
+    status_map = {}
+    if status_ids:
+        statuses = db.query(TaskStatus).filter(TaskStatus.id.in_(status_ids)).all()
+        status_map = {s.id: {"name": s.name, "color": s.color} for s in statuses}
+
+    for activity in activities:
+        old_status = status_map.get(activity.old_value, {}) if activity.old_value else {}
+        new_status = status_map.get(activity.new_value, {}) if activity.new_value else {}
+        
+        results.append({
+            "id": activity.id,
+            "task_id": activity.task_id,
+            "task_title": activity.task.title if activity.task else "Unknown Task",
+            "user_id": activity.user_id,
+            "user_name": activity.user.name if activity.user else "System",
+            "field_changed": activity.field_changed,
+            "old_value": activity.old_value,
+            "new_value": activity.new_value,
+            "old_status_name": old_status.get("name"),
+            "old_status_color": old_status.get("color"),
+            "new_status_name": new_status.get("name"),
+            "new_status_color": new_status.get("color"),
+            "created_at": activity.created_at.isoformat() if activity.created_at else None,
+        })
+
+    return ResponseSchema(data=results, message="Recent updates fetched successfully")
+
+
 @router.get("/{task_id}", response_model=ResponseSchema[TaskRead])
 def get_project_task(
     project_id: str,
@@ -151,7 +216,7 @@ def update_project_task(
 ):
     task = service.get_by_id(task_id)
     _ensure_task_in_project(task, project_id)
-    result = service.patch(task_id, schema)
+    result = service.patch(task_id, schema, user_id=current_user.id)
     return ResponseSchema(data=result, message="Task updated successfully")
 
 
