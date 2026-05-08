@@ -9,7 +9,9 @@ from app.repository.base_repository import BaseRepository
 
 
 class TeamRepository(BaseRepository):
-    def __init__(self, session_factory: Callable[..., AbstractContextManager[Session]]) -> None:
+    def __init__(
+        self, session_factory: Callable[..., AbstractContextManager[Session]]
+    ) -> None:
         super().__init__(session_factory=session_factory, model=Team)
 
     def get_my_teams(self, user_id: str):
@@ -17,6 +19,6 @@ class TeamRepository(BaseRepository):
             query = (
                 session.query(self.model)
                 .join(TeamMember)
-                .filter(TeamMember.user_id == user_id, Team.is_deleted == False)
+                .filter(TeamMember.user_id == user_id, Team.is_deleted.is_(False))
             )
             return query.all()

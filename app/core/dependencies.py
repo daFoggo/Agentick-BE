@@ -31,7 +31,9 @@ def get_token_payload(token: str = Depends(get_bearer_token)) -> dict[str, Any]:
     return payload
 
 
-def get_current_user(payload: dict[str, Any] = Depends(get_token_payload), db=Depends(get_db)) -> User:
+def get_current_user(
+    payload: dict[str, Any] = Depends(get_token_payload), db=Depends(get_db)
+) -> User:
     user_id = payload.get("sub")
     if not user_id:
         raise AuthError(detail="Invalid token payload.")
@@ -48,7 +50,9 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 
-def get_current_super_user(current_user: User = Depends(get_current_active_user)) -> User:
+def get_current_super_user(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
     if not current_user.is_superuser:
         raise AuthError(detail="Insufficient privileges.")
     return current_user

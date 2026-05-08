@@ -17,7 +17,9 @@ class Database:
                 engine_kwargs["poolclass"] = StaticPool
 
         self._engine = create_engine(db_url, **engine_kwargs)
-        self._session_factory = sessionmaker(autocommit=False, autoflush=False, bind=self._engine, expire_on_commit=False)
+        self._session_factory = sessionmaker(
+            autocommit=False, autoflush=False, bind=self._engine, expire_on_commit=False
+        )
 
     def create_database(self) -> None:
         BaseModel.metadata.create_all(self._engine)

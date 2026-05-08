@@ -40,7 +40,10 @@ def get_user_service(db=Depends(get_db)) -> UserService:
 
 
 @router.get("/me", response_model=ResponseSchema[UserInfo])
-def get_me(user: User = Depends(get_current_active_user), service: UserService = Depends(get_user_service)):
+def get_me(
+    user: User = Depends(get_current_active_user),
+    service: UserService = Depends(get_user_service),
+):
     result = service.get_me(user)
     return ResponseSchema(data=result, message="User profile fetched successfully")
 

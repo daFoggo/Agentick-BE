@@ -37,9 +37,19 @@ The database starts empty. You must apply migrations to create the tables.
 docker exec agentick-be-api alembic upgrade head
 ```
 
+### 4. AI Agent & Observability (OpenRouter & Opik)
+Our backend features an intelligent AI Agent to automate project tasks, monitored via Opik.
+- Configure your OpenRouter and Opik credentials in your `.env` file.
+- To enable the **Opik Agent Playground** with live local pairing, run:
+```bash
+uv run opik endpoint --project "Agentick" -- uv run uvicorn app.main:app --port 8000 --reload
+```
+For detailed setup and integration, please see the master guide: **[docs/agent_guide.md](docs/agent_guide.md)**.
+
 **Result:** Your API is now live at `http://localhost:8000/docs`.
 
 ---
+
 
 ## 🛠 Maintenance Commands
 
@@ -58,10 +68,12 @@ Agentick-BE follows the **Clean Architecture** pattern to separate concerns and 
 
 ### Folder Breakdown
 - `app/api/v1/endpoints/`: Handles HTTP requests, input validation, and formatting responses.
-- `app/services/`: Contains core business logic and cross-repository coordination.
+- `app/services/`: Contains core business logic, cross-repository coordination, and proactive agent outreach.
 - `app/repository/`: Handles data access and SQLAlchemy queries (Inherits from `base_repository.py`).
 - `app/model/`: Defines database tables using SQLAlchemy (Inherits from `base_model.py`).
 - `app/schema/`: Defines data validation and serialization using Pydantic.
+- `app/agents/`: AI Agent core reasoning loops, LLM interaction, and copywriting.
+- `app/tools/`: Adapters and external function definitions/execution mapping for LLM.
 - `app/core/`: System-wide configurations (Security, Database, Dependencies).
 - `migrations/`: Historical records of database schema changes managed by Alembic.
 
@@ -98,10 +110,30 @@ To maintain a consistent codebase, follow these steps when adding a new feature:
 }
 ```
 
+### 🧹 Code Quality (Ruff) - MANDATORY BEFORE PUSH
+
+We use **Ruff** for lightning-fast linting, formatting, and automatic error fixing.
+> [!IMPORTANT]
+> To maintain high code quality and consistency, you **MUST** run the check, fix, and formatting commands before pushing any code to GitHub:
+>
+> 1. **Check & Auto-Fix Errors:**
+>    ```bash
+>    uv run ruff check . --fix
+>    ```
+> 2. **Format Code:**
+>    ```bash
+>    uv run ruff format .
+>    ```
+
 ---
 
 ## 📚 Recommended Documentation
 
+### 🏠 Internal Reference Guides
+* **[docs/agent_guide.md](docs/agent_guide.md)** - Master configuration guide for AI Agent, OpenRouter, Opik Observability, and **Anthropic's "Building Effective Agents" Best Practices** applied.
+* **[docs/models.md](docs/models.md)** - ERD and detailed SQLAlchemy database models.
+
+### 🌐 Technology Ecosystem Docs
 | Technology | Link |
 | :--- | :--- |
 | **FastAPI** | [https://fastapi.tiangolo.com/](https://fastapi.tiangolo.com/) |
@@ -111,3 +143,4 @@ To maintain a consistent codebase, follow these steps when adding a new feature:
 | **UV (Package Manager)** | [https://docs.astral.sh/uv/](https://docs.astral.sh/uv/) |
 | **PostgreSQL** | [https://www.postgresql.org/](https://www.postgresql.org/) |
 | **Docker** | [https://www.docker.com/](https://www.docker.com/) |
+

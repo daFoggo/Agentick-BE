@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import List, Optional
+from typing import Optional
 
 from app.schema.base_schema import FindBase, ModelBaseInfo
 

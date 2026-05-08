@@ -24,6 +24,8 @@ class TaskBase(BaseModel):
     start_date: datetime
     due_date: datetime
     order: float = Field(..., ge=0)
+    estimated_hours: Optional[float] = None
+    actual_hours: float = 0.0
     is_archived: bool = False
     is_deleted: bool = False
 
@@ -42,6 +44,7 @@ class TaskCreate(BaseModel):
     start_date: datetime
     due_date: datetime
     order: Optional[float] = Field(None, ge=0)
+    estimated_hours: Optional[float] = None
 
 
 class TaskUpdate(BaseModel):
@@ -57,8 +60,8 @@ class TaskUpdate(BaseModel):
     due_date: Optional[datetime] = None
     order: Optional[float] = Field(None, ge=0)
     is_archived: Optional[bool] = None
-
-
+    estimated_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
 
 class TaskRead(ModelBaseInfo):
     project_id: str
@@ -74,6 +77,8 @@ class TaskRead(ModelBaseInfo):
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     order: float
+    estimated_hours: Optional[float] = None
+    actual_hours: float
     is_archived: bool
     is_deleted: bool
     assignees: Optional[List[ProjectMemberRead]] = []

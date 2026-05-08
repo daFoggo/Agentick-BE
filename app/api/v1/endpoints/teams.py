@@ -31,7 +31,9 @@ router = APIRouter(prefix="/teams", tags=["teams"])
 def get_team_service(db=Depends(get_db)) -> TeamService:
     team_repository = TeamRepository(lambda: nullcontext(db))
     team_member_repository = TeamMemberRepository(lambda: nullcontext(db))
-    return TeamService(team_repository=team_repository, team_member_repository=team_member_repository)
+    return TeamService(
+        team_repository=team_repository, team_member_repository=team_member_repository
+    )
 
 
 def get_team_member_service(db=Depends(get_db)) -> TeamMemberService:
@@ -47,11 +49,12 @@ def get_team_member_service(db=Depends(get_db)) -> TeamMemberService:
 
 # --- Team Endpoints ---
 
+
 @router.post("", response_model=ResponseSchema[TeamRead])
 def create_team(
     schema: TeamCreate,
     current_user: User = Depends(get_current_active_user),
-    service: TeamService = Depends(get_team_service)
+    service: TeamService = Depends(get_team_service),
 ):
     result = service.create_team(schema, current_user)
     return ResponseSchema(data=result, message="Team created successfully")
@@ -59,8 +62,7 @@ def create_team(
 
 @router.get("", response_model=ResponseSchema[FindResult[TeamRead]])
 def get_teams(
-    find_query: TeamFind = Depends(),
-    service: TeamService = Depends(get_team_service)
+    find_query: TeamFind = Depends(), service: TeamService = Depends(get_team_service)
 ):
     result = service.get_list(find_query)
     return ResponseSchema(data=result)
@@ -69,17 +71,14 @@ def get_teams(
 @router.get("/me", response_model=ResponseSchema[List[TeamRead]])
 def get_my_teams(
     current_user: User = Depends(get_current_active_user),
-    service: TeamService = Depends(get_team_service)
+    service: TeamService = Depends(get_team_service),
 ):
     result = service.get_my_teams(current_user.id)
     return ResponseSchema(data=result)
 
 
 @router.get("/{team_id}", response_model=ResponseSchema[TeamRead])
-def get_team(
-    team_id: str,
-    service: TeamService = Depends(get_team_service)
-):
+def get_team(team_id: str, service: TeamService = Depends(get_team_service)):
     result = service.get_team_details(team_id)
     return ResponseSchema(data=result)
 
@@ -89,7 +88,7 @@ def update_team(
     team_id: str,
     schema: TeamUpdate,
     current_user: User = Depends(get_current_active_user),
-    service: TeamService = Depends(get_team_service)
+    service: TeamService = Depends(get_team_service),
 ):
     result = service.update_team(team_id, schema, current_user)
     return ResponseSchema(data=result, message="Team updated successfully")
@@ -99,7 +98,7 @@ def update_team(
 def delete_team(
     team_id: str,
     current_user: User = Depends(get_current_active_user),
-    service: TeamService = Depends(get_team_service)
+    service: TeamService = Depends(get_team_service),
 ):
     service.delete_team(team_id, current_user)
     return ResponseSchema(data=True, message="Team deleted successfully")
@@ -107,22 +106,28 @@ def delete_team(
 
 # --- Team Member Endpoints ---
 
-@router.get("/{team_id}/members", response_model=ResponseSchema[FindResult[TeamMemberRead]])
+
+@router.get(
+    "/{team_id}/members", response_model=ResponseSchema[FindResult[TeamMemberRead]]
+)
 def get_team_members(
     team_id: str,
     find_query: TeamMemberFind = Depends(),
-    service: TeamMemberService = Depends(get_team_member_service)
+    service: TeamMemberService = Depends(get_team_member_service),
 ):
     find_query.team_id__eq = team_id
     result = service.get_members(find_query)
     return ResponseSchema(data=result)
 
 
-@router.get("/{team_id}/members/{user_id}/project-count", response_model=ResponseSchema[TeamMemberProjectCount])
+@router.get(
+    "/{team_id}/members/{user_id}/project-count",
+    response_model=ResponseSchema[TeamMemberProjectCount],
+)
 def get_member_project_count(
     team_id: str,
     user_id: str,
-    service: TeamMemberService = Depends(get_team_member_service)
+    service: TeamMemberService = Depends(get_team_member_service),
 ):
     count = service.get_member_project_count(team_id, user_id)
     return ResponseSchema(data=TeamMemberProjectCount(count=count))
@@ -133,19 +138,21 @@ def add_team_member(
     team_id: str,
     schema: TeamMemberCreate,
     current_user: User = Depends(get_current_active_user),
-    service: TeamMemberService = Depends(get_team_member_service)
+    service: TeamMemberService = Depends(get_team_member_service),
 ):
     result = service.add_member(team_id, schema, current_user)
     return ResponseSchema(data=result, message="Member added successfully")
 
 
-@router.patch("/{team_id}/members/{user_id}", response_model=ResponseSchema[TeamMemberRead])
+@router.patch(
+    "/{team_id}/members/{user_id}", response_model=ResponseSchema[TeamMemberRead]
+)
 def update_team_member(
     team_id: str,
     user_id: str,
     schema: TeamMemberUpdate,
     current_user: User = Depends(get_current_active_user),
-    service: TeamMemberService = Depends(get_team_member_service)
+    service: TeamMemberService = Depends(get_team_member_service),
 ):
     result = service.update_member_role(team_id, user_id, schema, current_user)
     return ResponseSchema(data=result, message="Member role updated successfully")
@@ -156,48 +163,56 @@ def remove_team_member(
     team_id: str,
     user_id: str,
     current_user: User = Depends(get_current_active_user),
-    service: TeamMemberService = Depends(get_team_member_service)
+    service: TeamMemberService = Depends(get_team_member_service),
 ):
     service.remove_member(team_id, user_id, current_user)
     return ResponseSchema(data=True, message="Member removed successfully")
 
 
-@router.post("/{team_id}/invitations/generate", response_model=ResponseSchema[TeamInviteTokenResponse])
+@router.post(
+    "/{team_id}/invitations/generate",
+    response_model=ResponseSchema[TeamInviteTokenResponse],
+)
 def generate_team_invitation(
     team_id: str,
     schema: TeamInviteGenerateRequest,
     current_user: User = Depends(get_current_active_user),
     team_service: TeamService = Depends(get_team_service),
     team_member_service: TeamMemberService = Depends(get_team_member_service),
-    invitation_service: InvitationService = Depends(get_invitation_service)
+    invitation_service: InvitationService = Depends(get_invitation_service),
 ):
     # Verify permission
     team_member_service.check_permission(team_id, current_user.id, "manager")
-    
+
     # Get team details for email
     team = team_service.get_team_details(team_id)
-    
+
     # Check if user with this email is already a member
     target_user = invitation_service.user_repository.read_by_email(schema.email)
     if target_user and team_member_service.is_user_member(team_id, target_user.id):
-        raise DuplicatedError(detail=f"User with email {schema.email} is already a member of this team.")
+        raise DuplicatedError(
+            detail=f"User with email {schema.email} is already a member of this team."
+        )
 
     invitation = invitation_service.create_and_send_invitation(
         email=schema.email,
         inviter=current_user,
         role=schema.role,
         team_id=team_id,
-        target_name=team.name
+        target_name=team.name,
     )
     # Return fake token just to not break existing FE types temporarily. We will remove this later if needed.
-    return ResponseSchema(data=TeamInviteTokenResponse(token=invitation.id), message="Invitation sent successfully")
+    return ResponseSchema(
+        data=TeamInviteTokenResponse(token=invitation.id),
+        message="Invitation sent successfully",
+    )
 
 
 @router.post("/invitations/accept", response_model=ResponseSchema[TeamMemberRead])
 def accept_team_invitation(
     schema: TeamInviteAcceptRequest,
     current_user: User = Depends(get_current_active_user),
-    service: TeamMemberService = Depends(get_team_member_service)
+    service: TeamMemberService = Depends(get_team_member_service),
 ):
     result = service.accept_invite_token(schema.token, current_user)
     return ResponseSchema(data=result, message="Successfully joined the team")

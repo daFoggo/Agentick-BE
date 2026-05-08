@@ -1,9 +1,17 @@
-from enum import Enum
 from datetime import datetime
-from sqlalchemy import DateTime, String, ForeignKey, Text, Column, Table
+from enum import Enum
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Column, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.model.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.model.task import Task
+    from app.model.team import Team
+    from app.model.team_member import TeamMember
+    from app.model.user import User
 
 
 class EventType(str, Enum):
@@ -15,31 +23,53 @@ class EventType(str, Enum):
 event_participant = Table(
     "event_participant",
     BaseModel.metadata,
-    Column("event_id", String(36), ForeignKey("event.id", ondelete="CASCADE"), primary_key=True),
-    Column("team_member_id", String(36), ForeignKey("team_member.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "event_id",
+        String(36),
+        ForeignKey("event.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "team_member_id",
+        String(36),
+        ForeignKey("team_member.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
 
 
 class Event(BaseModel):
     __tablename__ = "event"
 
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("user.id"), nullable=False)
-    team_id: Mapped[str] = mapped_column(String(36), ForeignKey("team.id"), nullable=False, index=True)
-    
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("user.id"), nullable=False
+    )
+    team_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("team.id"), nullable=False, index=True
+    )
+    task_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("task.id"), nullable=True
+    )
+    event_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     type: Mapped[str] = mapped_column(String(50), nullable=False)
-    
+
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
-    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    start_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    
 
     # Relationships
     user: Mapped["User"] = relationship("User")
     team: Mapped["Team"] = relationship("Team")
-    participants: Mapped[list["TeamMember"]] = relationship("TeamMember", secondary=event_participant)
-    
+    task: Mapped["Task | None"] = relationship("Task")
+    participants: Mapped[list["TeamMember"]] = relationship(
+        "TeamMember", secondary=event_participant
+    )
+
     @property
     def participant_ids(self) -> list[str]:
         return [p.id for p in self.participants]

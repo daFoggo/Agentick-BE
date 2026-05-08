@@ -32,7 +32,9 @@ class ProjectService(BaseService):
         self._task_type_repository = task_type_repository
         self._task_priority_repository = task_priority_repository
 
-    def _ensure_user_in_team(self, team_id: str, user_id: str, allow_roles: set[str] | None = None):
+    def _ensure_user_in_team(
+        self, team_id: str, user_id: str, allow_roles: set[str] | None = None
+    ):
         team = self._team_repository.read_by_id(team_id)
         if not team or team.is_deleted:
             raise NotFoundError(detail="Team not found.")
@@ -49,7 +51,12 @@ class ProjectService(BaseService):
 
     def _seed_project_catalogs(self, project_id: str):
         """Seed default TaskStatus, TaskType, and TaskPriority for a new project."""
-        def _mark_single_default(items: list[dict], default_index: int = 0, completed_index: int | None = None) -> list[dict]:
+
+        def _mark_single_default(
+            items: list[dict],
+            default_index: int = 0,
+            completed_index: int | None = None,
+        ) -> list[dict]:
             normalized_items: list[dict] = []
             for index, item in enumerate(items):
                 normalized_item = item.copy()
@@ -62,10 +69,34 @@ class ProjectService(BaseService):
         # Default Task Statuses
         statuses = _mark_single_default(
             [
-                {"project_id": project_id, "name": "To Do", "color": "#808080", "order": 0, "is_completed": False},
-                {"project_id": project_id, "name": "In Progress", "color": "#0066CC", "order": 1, "is_completed": False},
-                {"project_id": project_id, "name": "In Review", "color": "#FF9900", "order": 2, "is_completed": False},
-                {"project_id": project_id, "name": "Done", "color": "#00CC00", "order": 3, "is_completed": False},
+                {
+                    "project_id": project_id,
+                    "name": "To Do",
+                    "color": "#808080",
+                    "order": 0,
+                    "is_completed": False,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "In Progress",
+                    "color": "#0066CC",
+                    "order": 1,
+                    "is_completed": False,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "In Review",
+                    "color": "#FF9900",
+                    "order": 2,
+                    "is_completed": False,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Done",
+                    "color": "#00CC00",
+                    "order": 3,
+                    "is_completed": False,
+                },
             ],
             default_index=0,
             completed_index=3,
@@ -76,10 +107,34 @@ class ProjectService(BaseService):
         # Default Task Types
         types = _mark_single_default(
             [
-                {"project_id": project_id, "name": "Feature", "color": "#0066CC", "icon": "star", "order": 0},
-                {"project_id": project_id, "name": "Bug", "color": "#DD0000", "icon": "bug", "order": 1},
-                {"project_id": project_id, "name": "Improvement", "color": "#FF9900", "icon": "zap", "order": 2},
-                {"project_id": project_id, "name": "Task", "color": "#6600CC", "icon": "check", "order": 3},
+                {
+                    "project_id": project_id,
+                    "name": "Feature",
+                    "color": "#0066CC",
+                    "icon": "star",
+                    "order": 0,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Bug",
+                    "color": "#DD0000",
+                    "icon": "bug",
+                    "order": 1,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Improvement",
+                    "color": "#FF9900",
+                    "icon": "zap",
+                    "order": 2,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Task",
+                    "color": "#6600CC",
+                    "icon": "check",
+                    "order": 3,
+                },
             ],
             default_index=0,
         )
@@ -89,10 +144,34 @@ class ProjectService(BaseService):
         # Default Task Priorities
         priorities = _mark_single_default(
             [
-                {"project_id": project_id, "name": "Low", "color": "#00CC00", "level": 0, "order": 0},
-                {"project_id": project_id, "name": "Medium", "color": "#FFCC00", "level": 1, "order": 1},
-                {"project_id": project_id, "name": "High", "color": "#FF6600", "level": 2, "order": 2},
-                {"project_id": project_id, "name": "Urgent", "color": "#DD0000", "level": 3, "order": 3},
+                {
+                    "project_id": project_id,
+                    "name": "Low",
+                    "color": "#00CC00",
+                    "level": 0,
+                    "order": 0,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Medium",
+                    "color": "#FFCC00",
+                    "level": 1,
+                    "order": 1,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "High",
+                    "color": "#FF6600",
+                    "level": 2,
+                    "order": 2,
+                },
+                {
+                    "project_id": project_id,
+                    "name": "Urgent",
+                    "color": "#DD0000",
+                    "level": 3,
+                    "order": 3,
+                },
             ],
             default_index=0,
         )
@@ -100,7 +179,9 @@ class ProjectService(BaseService):
             self._task_priority_repository.create(priority)
 
     def create_project(self, schema: ProjectCreate, current_user: User):
-        self._ensure_user_in_team(schema.team_id, current_user.id, allow_roles={"owner", "manager"})
+        self._ensure_user_in_team(
+            schema.team_id, current_user.id, allow_roles={"owner", "manager"}
+        )
         project = self._repository.create(schema)
         self._project_member_repository.create(
             {
@@ -124,17 +205,23 @@ class ProjectService(BaseService):
         )
         if not member.get("founds"):
             raise AuthError(detail="You are not a member of this project.")
-            
+
         return project
 
-    def update_project(self, project_id: str, schema: ProjectUpdate, current_user: User):
+    def update_project(
+        self, project_id: str, schema: ProjectUpdate, current_user: User
+    ):
         project = self.get_project_details(project_id, current_user)
-        self._ensure_user_in_team(project.team_id, current_user.id, allow_roles={"owner", "manager"})
+        self._ensure_user_in_team(
+            project.team_id, current_user.id, allow_roles={"owner", "manager"}
+        )
         return self._repository.update(project_id, schema)
 
     def delete_project(self, project_id: str, current_user: User):
         project = self.get_project_details(project_id, current_user)
-        self._ensure_user_in_team(project.team_id, current_user.id, allow_roles={"owner", "manager"})
+        self._ensure_user_in_team(
+            project.team_id, current_user.id, allow_roles={"owner", "manager"}
+        )
         return self._repository.update_attr(project_id, "is_deleted", True)
 
     def get_my_projects(self, user_id: str):
@@ -144,8 +231,7 @@ class ProjectService(BaseService):
         # Always filter projects by user membership
         # This overrides the repository's default search to ensure privacy
         projects = self._repository.get_my_projects(
-            current_user.id, 
-            team_id=find_query.team_id__eq
+            current_user.id, team_id=find_query.team_id__eq
         )
         return {
             "founds": projects,
@@ -153,6 +239,6 @@ class ProjectService(BaseService):
                 "total_count": len(projects),
                 "page": find_query.page or 1,
                 "page_size": find_query.page_size or len(projects),
-                "ordering": find_query.ordering
-            }
+                "ordering": find_query.ordering,
+            },
         }

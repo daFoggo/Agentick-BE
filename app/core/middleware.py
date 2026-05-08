@@ -9,7 +9,9 @@ def inject(func):
         try:
             return func(*args, **kwargs)
         finally:
-            injected_services = [arg for arg in kwargs.values() if isinstance(arg, BaseService)]
+            injected_services = [
+                arg for arg in kwargs.values() if isinstance(arg, BaseService)
+            ]
             if injected_services:
                 try:
                     injected_services[-1].close_scoped_session()

@@ -14,7 +14,14 @@ from app.repository.calendar_repository import CalendarRepository
 from app.repository.event_repository import EventRepository
 from app.repository.work_schedule_repository import WorkScheduleRepository
 from app.schema.base_schema import ResponseSchema
-from app.schema.auth_schema import RefreshTokenRequest, SignIn, SignInResponse, SignUp, TokenResponse, UserInfo
+from app.schema.auth_schema import (
+    RefreshTokenRequest,
+    SignIn,
+    SignInResponse,
+    SignUp,
+    TokenResponse,
+    UserInfo,
+)
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 from app.services.team_service import TeamService
@@ -30,7 +37,9 @@ def get_auth_service(db=Depends(get_db)) -> AuthService:
     user_service = UserService(user_repository=user_repository)
     team_repository = TeamRepository(lambda: nullcontext(db))
     team_member_repository = TeamMemberRepository(lambda: nullcontext(db))
-    team_service = TeamService(team_repository=team_repository, team_member_repository=team_member_repository)
+    team_service = TeamService(
+        team_repository=team_repository, team_member_repository=team_member_repository
+    )
     project_repository = ProjectRepository(lambda: nullcontext(db))
     project_member_repository = ProjectMemberRepository(lambda: nullcontext(db))
     task_status_repository = TaskStatusRepository(lambda: nullcontext(db))
@@ -45,17 +54,19 @@ def get_auth_service(db=Depends(get_db)) -> AuthService:
         task_type_repository=task_type_repository,
         task_priority_repository=task_priority_repository,
     )
-    
+
     calendar_repository = CalendarRepository(lambda: nullcontext(db))
     event_repository = EventRepository(lambda: nullcontext(db))
     calendar_service = CalendarService(
         calendar_repository=calendar_repository,
         event_repository=event_repository,
     )
-    
+
     work_schedule_repository = WorkScheduleRepository(lambda: nullcontext(db))
-    schedule_service = ScheduleService(work_schedule_repository=work_schedule_repository)
-    
+    schedule_service = ScheduleService(
+        work_schedule_repository=work_schedule_repository
+    )
+
     return AuthService(
         user_repository=user_repository,
         user_service=user_service,
@@ -79,6 +90,8 @@ def sign_in(payload: SignIn, service: AuthService = Depends(get_auth_service)):
 
 
 @router.post("/refresh", response_model=ResponseSchema[TokenResponse])
-def refresh_token(payload: RefreshTokenRequest, service: AuthService = Depends(get_auth_service)):
+def refresh_token(
+    payload: RefreshTokenRequest, service: AuthService = Depends(get_auth_service)
+):
     result = service.refresh_token(payload)
     return ResponseSchema(data=result, message="Token refreshed successfully")

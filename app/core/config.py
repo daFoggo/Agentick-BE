@@ -50,7 +50,9 @@ class Settings(BaseSettings):
     DB_PORT: str = "3306"
     DATABASE_URL: str | None = None
 
-    DATABASE_URI_FORMAT: str = "{db_engine}://{user}:{password}@{host}:{port}/{database}"
+    DATABASE_URI_FORMAT: str = (
+        "{db_engine}://{user}:{password}@{host}:{port}/{database}"
+    )
 
     # Email / SMTP configuration
     SMTP_HOST: str | None = "smtp.gmail.com"
@@ -60,6 +62,11 @@ class Settings(BaseSettings):
     EMAILS_FROM_NAME: str = "Agentick"
 
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # OpenRouter
+    OPENROUTER_API_KEY: str | None = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
 
     # find query
     PAGE: int = 1
@@ -91,7 +98,9 @@ class Settings(BaseSettings):
         if self.DATABASE_URL:
             return self.DATABASE_URL
 
-        database = self.ENV_DATABASE_MAPPER.get(self.ENV, self.ENV_DATABASE_MAPPER["dev"])
+        database = self.ENV_DATABASE_MAPPER.get(
+            self.ENV, self.ENV_DATABASE_MAPPER["dev"]
+        )
         missing_values = [
             name
             for name, value in {
