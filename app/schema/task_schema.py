@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
+
+from pydantic import BaseModel, Field, ConfigDict
+
 from app.schema.base_schema import FindBase, ModelBaseInfo
 from app.schema.project_member_schema import ProjectMemberRead
+from app.schema.task_status_schema import TaskStatusRead
 
 
 class TaskBase(BaseModel):
@@ -58,7 +63,6 @@ class TaskUpdate(BaseModel):
     estimated_hours: Optional[float] = None
     actual_hours: Optional[float] = None
 
-
 class TaskRead(ModelBaseInfo):
     project_id: str
     parent_id: Optional[str] = None
@@ -78,6 +82,7 @@ class TaskRead(ModelBaseInfo):
     is_archived: bool
     is_deleted: bool
     assignees: Optional[List[ProjectMemberRead]] = []
+    status: Optional[TaskStatusRead] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -92,3 +97,53 @@ class TaskFind(FindBase):
     assignee_ids__contains: Optional[str] = None
     is_archived__eq: Optional[bool] = None
     is_deleted__eq: Optional[bool] = False
+    # Dashboard Overview: filter tasks assigned to a specific user (by user.id)
+    assignee_user_id__eq: Optional[str] = None
+
+
+# ── Dashboard: Task Stats ─────────────────────────────────────────────────────
+
+class TaskStatItem(BaseModel):
+    """Một nhóm thống kê (priority / status / type) với số lượng task."""
+    id: str
+    name: str
+    color: str
+    count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectTaskStats(BaseModel):
+    """Response cho GET /projects/{project_id}/tasks/stats"""
+    by_priority: List[TaskStatItem]
+    by_status: List[TaskStatItem]
+    by_type: List[TaskStatItem]
+    period: str        # "weekly" | "monthly"
+    date_from: str     # ISO date string
+    date_to: str       # ISO date string
+
+
+# ── Dashboard: Member Workload ────────────────────────────────────────────────
+
+class WorkloadDataPoint(BaseModel):
+    """Số task của một member trong một ngày cụ thể."""
+    date: str          # "YYYY-MM-DD"
+    task_count: int
+
+
+class MemberWorkload(BaseModel):
+    """Workload series của một member trong project."""
+    user_id: str
+    name: str
+    avatar_url: Optional[str] = None
+    series: List[WorkloadDataPoint]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectWorkloadResponse(BaseModel):
+    """Response cho GET /projects/{project_id}/members/workload"""
+    members: List[MemberWorkload]
+    period: str        # "weekly" | "monthly"
+    date_from: str
+    date_to: str

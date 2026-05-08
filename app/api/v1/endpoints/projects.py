@@ -1,11 +1,16 @@
 from contextlib import nullcontext
-from typing import List
+from datetime import datetime, timedelta, timezone
+from typing import List, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, distinct
 
 from app.core.dependencies import get_current_active_user, get_db
 from app.core.exceptions import DuplicatedError
 from app.model.user import User
+from app.model.task import Task, task_assignee
+from app.model.project_member import ProjectMember
+from app.model.task_status import TaskStatus
 from app.repository.project_member_repository import ProjectMemberRepository
 from app.repository.project_repository import ProjectRepository
 from app.repository.team_member_repository import TeamMemberRepository
@@ -28,7 +33,12 @@ from app.schema.project_schema import (
     ProjectRead,
     ProjectUpdate,
 )
-from app.schema.task_schema import TaskRead
+from app.schema.task_schema import (
+    MemberWorkload,
+    ProjectWorkloadResponse,
+    TaskRead,
+    WorkloadDataPoint,
+)
 from app.services.project_member_service import ProjectMemberService
 from app.services.project_service import ProjectService
 from app.services.invitation_service import InvitationService
@@ -235,3 +245,104 @@ def get_project_gantt(
 ):
     result = task_service.get_gantt_data(project_id)
     return ResponseSchema(data=result)
+
+
+@router.get("/{project_id}/members/workload", response_model=ResponseSchema[ProjectWorkloadResponse])
+def get_project_member_workload(
+    project_id: str,
+    period: Literal["weekly", "monthly"] = Query(default="weekly"),
+    current_user: User = Depends(get_current_active_user),
+    db=Depends(get_db),
+):
+    """
+    Workload của từng member trong project — số task/ngày theo tuần hoặc tháng.
+    Dùng cho biểu đồ ProjectWorkload trên Dashboard.
+    """
+    from sqlalchemy import cast, Date as SADate
+
+    now = datetime.now(timezone.utc)
+
+    # weekly = 7 ngày qua, monthly = 30 ngày qua
+    delta = timedelta(days=7) if period == "weekly" else timedelta(days=30)
+    date_from = now - delta
+    date_to = now
+
+    # Lấy tất cả member của project (join với user để lấy thông tin)
+    from sqlalchemy.orm import joinedload
+    members = (
+        db.query(ProjectMember)
+        .options(joinedload(ProjectMember.user))
+        .filter(ProjectMember.project_id == project_id)
+        .all()
+    )
+
+    result_members: list[MemberWorkload] = []
+
+    for member in members:
+        user = member.user
+
+        # Convert UTC → local time (Asia/Ho_Chi_Minh = UTC+7) trước khi cast sang Date
+        # để tránh lệch ngày với task được done lúc trước 7am Vietnam time
+        local_day_expr = cast(
+            func.timezone("Asia/Ho_Chi_Minh", Task.updated_at), SADate
+        ).label("day")
+
+        # Query: đếm task DONE được assign cho member, nhóm theo ngày local
+        rows = (
+            db.query(
+                local_day_expr,
+                func.count(distinct(Task.id)).label("task_count"),
+            )
+            .join(task_assignee, task_assignee.c.task_id == Task.id)
+            .join(TaskStatus, Task.status_id == TaskStatus.id)
+            .filter(
+                Task.project_id == project_id,
+                task_assignee.c.project_member_id == member.id,
+                Task.is_deleted.is_(False),
+                Task.is_archived.is_(False),
+                # Lấy task done: is_completed=True HOẶC tên status là "Done" (fallback)
+                (TaskStatus.is_completed.is_(True) | (func.lower(TaskStatus.name) == "done")),
+                Task.updated_at >= date_from,
+                Task.updated_at < date_to,
+            )
+            .group_by(local_day_expr)
+            .order_by(local_day_expr)
+            .all()
+        )
+
+        # Map từ DB → dict để lookup nhanh
+        count_by_day: dict[str, int] = {str(row.day): row.task_count for row in rows}
+
+        # Fill đầy đủ mỗi ngày trong range (kể cả ngày = 0 task done)
+        # Dùng local date (UTC+7) để tránh lệch ngày
+        vn_offset = timedelta(hours=7)
+        local_start = (date_from + vn_offset).date()
+        local_end   = (date_to + vn_offset).date() + timedelta(days=1)  # inclusive today
+
+        series: list[WorkloadDataPoint] = []
+        current_day = local_start
+        while current_day < local_end:
+            day_str = current_day.isoformat()
+            series.append(
+                WorkloadDataPoint(date=day_str, task_count=count_by_day.get(day_str, 0))
+            )
+            current_day += timedelta(days=1)
+
+        result_members.append(
+            MemberWorkload(
+                user_id=user.id,
+                name=user.name,
+                avatar_url=user.avatar_url,
+                series=series,
+            )
+        )
+
+    return ResponseSchema(
+        data=ProjectWorkloadResponse(
+            members=result_members,
+            period=period,
+            date_from=date_from.date().isoformat(),
+            date_to=date_to.date().isoformat(),
+        ),
+        message="Member workload fetched successfully",
+    )

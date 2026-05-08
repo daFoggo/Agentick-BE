@@ -1,5 +1,6 @@
 from app.model.calendar import Calendar
 from app.model.event import Event
+from app.model.task_activity import TaskActivity
 from app.model.invitation import Invitation
 from app.model.notification import Notification
 from app.model.phase import Phase
@@ -40,4 +41,5 @@ __all__ = [
     "WorkSchedule",
     "Calendar",
     "Event",
+    "TaskActivity",
 ]
