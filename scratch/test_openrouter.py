@@ -43,8 +43,7 @@ def test_openrouter():
         print("   OPENROUTER_API_KEY=your_actual_key_here")
         return
 
-    masked_key = f"{api_key[:8]}...{api_key[-4:] if len(api_key) > 12 else ''}"
-    print(f"🔑 Đã tìm thấy API Key: {masked_key}")
+    print("🔑 Đã tìm thấy API Key.")
     print(f"🤖 Model đang sử dụng: {model_name}")
 
     url = "https://openrouter.ai/api/v1/chat/completions"
