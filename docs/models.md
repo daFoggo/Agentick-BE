@@ -234,9 +234,12 @@ erDiagram
         string id PK
         string task_id FK
         string user_id FK
-        float logged_hours
-        datetime logged_date
-        string description
+        string log_type
+        datetime started_at
+        datetime ended_at
+        float hours
+        string note
+        date logged_date
         datetime created_at
         datetime updated_at
     }
@@ -244,10 +247,11 @@ erDiagram
     TASK_CHECKPOINT {
         string id PK
         string task_id FK
-        string user_id FK
-        float progress_percentage
+        string reported_by FK
+        int progress_pct
+        boolean is_blocked
+        string blocked_reason
         float remaining_hours
-        string notes
         datetime created_at
         datetime updated_at
     }
@@ -262,6 +266,9 @@ erDiagram
         datetime alert_sent_at
         string recommendation
         json signals
+        datetime predicted_completion_at
+        datetime actual_completed_at
+        float prediction_error_hours
         datetime created_at
         datetime updated_at
     }
@@ -273,6 +280,8 @@ erDiagram
         string outreach_type
         string channel
         datetime sent_at
+        datetime responded_at
+        string response_type
         datetime created_at
         datetime updated_at
     }
@@ -297,7 +306,7 @@ erDiagram
     USER ||--o{ EVENT : "creates"
     USER ||--o{ INVITATION : "invites"
     USER ||--o{ TASK_TIME_LOG : "logs_time"
-    USER ||--o{ TASK_CHECKPOINT : "logs_checkpoints"
+    USER ||--o{ TASK_CHECKPOINT : "logs_checkpoints (reported_by)"
     USER ||--o{ AGENT_OUTREACH : "receives_outreaches"
 
     TEAM ||--o{ TEAM_MEMBER : "contains"
@@ -595,9 +604,12 @@ Ghi nhận thời gian thực tế đã bỏ ra cho một Task bởi thành viê
 - **Trường dữ liệu:**
   - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
   - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` người thực hiện ghi nhận.
-  - `logged_hours` (`Float`): Số giờ thực tế đã làm việc.
+  - `log_type` (`String(20)`): Loại ghi nhận (`timer` hoặc `manual`).
+  - `started_at` (`DateTime`, nullable): Thời điểm bắt đầu ghi nhận (dành cho timer).
+  - `ended_at` (`DateTime`, nullable): Thời điểm kết thúc ghi nhận (dành cho timer).
+  - `hours` (`Float`): Số giờ thực tế đã làm việc.
+  - `note` (`String(500)`, nullable): Ghi chú mô tả phần việc đã thực hiện.
   - `logged_date` (`Date`): Ngày làm việc được ghi nhận.
-  - `description` (`Text`, nullable): Ghi chú mô tả phần việc đã thực hiện.
 - **Quan hệ:**
   - `task` (Quan hệ N-1 với `Task`).
   - `user` (Quan hệ N-1 với `User`).
@@ -606,25 +618,29 @@ Ghi nhận thời gian thực tế đã bỏ ra cho một Task bởi thành viê
 Lưu giữ tiến độ cập nhật thực tế tại các thời điểm kiểm tra của Task.
 - **Trường dữ liệu:**
   - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
-  - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` ghi nhận checkpoint.
-  - `progress_percentage` (`Float`): Phần trăm tiến độ công việc (từ `0.0` đến `100.0`).
+  - `reported_by` (`String(36)`): Khóa ngoại liên kết tới `User` ghi nhận checkpoint.
+  - `progress_pct` (`Integer`): Phần trăm tiến độ công việc (từ `0` đến `100`).
+  - `is_blocked` (`Boolean`, default `False`): Trạng thái công việc bị nghẽn (blocked) hay không.
+  - `blocked_reason` (`String(500)`, nullable): Lý do công việc bị nghẽn.
   - `remaining_hours` (`Float`, nullable): Số giờ ước tính còn lại cần thiết để hoàn thành công việc.
-  - `notes` (`Text`, nullable): Nhận xét hoặc ghi chú tình trạng tiến độ.
 - **Quan hệ:**
   - `task` (Quan hệ N-1 với `Task`).
-  - `user` (Quan hệ N-1 với `User`).
+  - `reporter` (Quan hệ N-1 với `User` thông qua `reported_by`).
 
 #### 19. [RiskSnapshot](file:///d:/Dev%20projects/Agentick-BE/app/model/risk_snapshot.py) (Bảng `risk_snapshot`)
 Ảnh chụp rủi ro công việc được phân tích và đánh giá tự động bởi AI Agent tại một thời điểm cụ thể.
 - **Trường dữ liệu:**
   - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
   - `risk_score` (`Float`): Điểm số rủi ro (từ `0.0` đến `1.0`).
-  - `risk_level` (`String(20)`): Phân loại mức độ rủi ro (`low`, `medium`, `high`).
-  - `alert_type` (`String(50)`): Loại cảnh báo rủi ro kích hoạt (`data_gap`, `stale`, `high_risk`).
+  - `risk_level` (`String(20)`): Phân loại mức độ rủi ro (`low`, `medium`, `high`, `critical`).
+  - `alert_type` (`String(50)`, nullable): Loại cảnh báo rủi ro kích hoạt (`data_gap`, `stale`, `high_risk`).
   - `alert_sent` (`Boolean`, default `False`): Đã gửi cảnh báo liên hệ người dùng hay chưa.
   - `alert_sent_at` (`DateTime`, nullable): Thời điểm gửi cảnh báo.
-  - `signals` (`JSON`): Các tín hiệu/dữ liệu rủi ro phân tích bởi AI (ví dụ: thiếu estimated_hours, quá hạn, v.v.).
-  - `recommendation` (`Text`): Đề xuất đề xuất giải quyết rủi ro do AI đưa ra.
+  - `signals` (`JSON`, nullable): Các tín hiệu/dữ liệu rủi ro phân tích bởi AI.
+  - `recommendation` (`Text`, nullable): Đề xuất giải quyết rủi ro do AI đưa ra.
+  - `predicted_completion_at` (`DateTime`, nullable): Thời điểm AI dự báo công việc sẽ hoàn thành.
+  - `actual_completed_at` (`DateTime`, nullable): Thời điểm công việc thực tế đã hoàn thành.
+  - `prediction_error_hours` (`Float`, nullable): Sai số giữa thời gian hoàn thành thực tế và thời gian AI dự báo (tính bằng giờ).
 - **Quan hệ:**
   - `task` (Quan hệ N-1 với `Task`).
 
@@ -633,12 +649,14 @@ Lịch sử Agent chủ động tương tác ra bên ngoài hệ thống với n
 - **Trường dữ liệu:**
   - `task_id` (`String(36)`): Khóa ngoại liên kết tới `Task`.
   - `user_id` (`String(36)`): Khóa ngoại liên kết tới `User` người nhận thông tin.
-  - `outreach_type` (`String(50)`): Loại tiếp cận (`missing_estimate`, `stale_update`).
-  - `channel` (`String(50)`, default `"email"`): Kênh tương tác tiếp cận (ví dụ: `email`, `slack`).
+  - `outreach_type` (`String(50)`): Loại tiếp cận (`missing_estimate`, `missing_progress`, `stale_update`).
+  - `channel` (`String(20)`): Kênh tương tác tiếp cận (`email`, `telegram`, `in_app`).
   - `sent_at` (`DateTime`): Thời điểm gửi tiếp cận thực tế.
+  - `responded_at` (`DateTime`, nullable): Thời điểm người dùng phản hồi tiếp cận.
+  - `response_type` (`String(50)`, nullable): Loại phản hồi của người dùng (`updated_task`, `ignored`, `snoozed`).
 - **Quan hệ:**
   - `task` (Quan hệ N-1 với `Task`).
-  - `user` (Quan hệ N-1 với `User`).
+  - `user` (Quan hệ N-1 with `User`).
 
 #### 21. [TaskActivity](file:///d:/Dev%20projects/Agentick-BE/app/model/task_activity.py) (Bảng `task_activity`)
 Ghi nhận lịch sử thay đổi các trường dữ liệu của Task bởi người dùng.

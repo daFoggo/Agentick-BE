@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "agentick-be"
     PROJECT_NAME: str = "fca-api"
     ENV: str = "dev"
+    TIMEZONE: str = "Asia/Ho_Chi_Minh"
     API: str = "/api"
     API_V1_STR: str = "/api/v1"
     API_V2_STR: str = "/api/v2"
@@ -67,6 +68,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str | None = None
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
+
+    # Telegram Configuration
+    TELEGRAM_BOT_TOKEN: str | None = None
+    TELEGRAM_CHAT_ID: str | None = None
 
     # find query
     PAGE: int = 1

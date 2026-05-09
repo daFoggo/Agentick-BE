@@ -1,0 +1,274 @@
+import json
+import httpx
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict
+from sqlalchemy import select, desc, func
+from sqlalchemy.orm import Session
+from opik import track
+
+from app.services.base_service import BaseService
+from app.agents.custom_agent import CustomAgent
+from app.model.task import Task
+from app.model.task_checkpoint import TaskCheckpoint
+from app.model.work_schedule import WorkSchedule
+from app.model.risk_snapshot import RiskSnapshot
+from app.model.project_member import ProjectMember
+from app.utils.email import send_risk_alert_email
+from app.core.config import configs
+
+
+class RiskAnalysisService(BaseService):
+    def __init__(self, db: Session, repository: Any = None):
+        super().__init__(repository)
+        self.db = db
+        self.agent = CustomAgent()
+
+    @track(name="calculate_programmatic_signals")
+    def calculate_programmatic_signals(self, task: Task) -> Dict[str, Any]:
+        """
+        Calculates all risk metrics deterministically using Python code.
+        """
+        now_utc = datetime.now(timezone.utc)
+        signals = {}
+
+        # 1. Time Variance Factor
+        estimated = task.estimated_hours or 0.0
+        actual = task.actual_hours or 0.0
+        variance = actual - estimated
+        signals["estimated_hours"] = estimated
+        signals["actual_hours"] = actual
+        signals["time_variance_hours"] = variance
+        signals["is_over_estimate"] = variance > 0 if estimated > 0 else False
+
+        # 2. Checkpoint Factor
+        last_checkpoint = self.db.scalars(
+            select(TaskCheckpoint)
+            .where(TaskCheckpoint.task_id == task.id)
+            .order_by(desc(TaskCheckpoint.created_at))
+            .limit(1)
+        ).first()
+
+        if last_checkpoint:
+            signals["last_checkpoint_progress_pct"] = last_checkpoint.progress_pct
+            signals["last_checkpoint_remaining_hours"] = last_checkpoint.remaining_hours
+            signals["is_blocked"] = last_checkpoint.is_blocked
+            signals["blocked_reason"] = last_checkpoint.blocked_reason
+        else:
+            signals["last_checkpoint_progress_pct"] = 0
+            signals["last_checkpoint_remaining_hours"] = estimated
+            signals["is_blocked"] = False
+            signals["blocked_reason"] = None
+
+        # 3. Schedule Factor (Working Hours Availability)
+        assignees = task.assignees
+        if assignees and task.due_date:
+            primary_assignee = assignees[0]
+            user_id = primary_assignee.user_id
+
+            # Fetch work schedules
+            schedules = self.db.scalars(
+                select(WorkSchedule).where(WorkSchedule.user_id == user_id)
+            ).all()
+
+            # Map of day_of_week to working hours
+            schedule_map = {s.day_of_week: s for s in schedules}
+
+            # Calculate total working hours available until deadline
+            total_working_hours_available = 0.0
+            due_date = task.due_date
+
+            temp_date = now_utc
+            while temp_date <= due_date:
+                day_num = temp_date.weekday()  # Monday is 0, Sunday is 6
+                day_schedule = schedule_map.get(day_num)
+                if day_schedule and not day_schedule.is_off:
+                    if day_schedule.start_time and day_schedule.end_time:
+                        try:
+                            fmt = "%H:%M"
+                            t1 = datetime.strptime(day_schedule.start_time, fmt)
+                            t2 = datetime.strptime(day_schedule.end_time, fmt)
+                            hrs = (t2 - t1).total_seconds() / 3600
+                            total_working_hours_available += hrs
+                        except Exception:
+                            total_working_hours_available += 8.0
+                    else:
+                        total_working_hours_available += 8.0
+                temp_date = temp_date + timedelta(days=1)
+
+            remaining_needed = (
+                last_checkpoint.remaining_hours
+                if (last_checkpoint and last_checkpoint.remaining_hours is not None)
+                else max(0.0, estimated - actual)
+            )
+
+            signals["available_working_hours"] = total_working_hours_available
+            signals["remaining_needed_hours"] = remaining_needed
+            signals["has_schedule_bottleneck"] = (
+                remaining_needed > total_working_hours_available
+            )
+        else:
+            signals["available_working_hours"] = None
+            signals["remaining_needed_hours"] = max(0.0, estimated - actual)
+            signals["has_schedule_bottleneck"] = False
+
+        # 4. Congestion Factor (Parallel active tasks of assignee)
+        if assignees:
+            user_id = assignees[0].user_id
+            # Subquery project members of this user
+            member_ids = self.db.scalars(
+                select(ProjectMember.id).where(ProjectMember.user_id == user_id)
+            ).all()
+
+            # Count parallel active (not Done / Completed) tasks
+            parallel_tasks_count = self.db.scalar(
+                select(func.count(Task.id))
+                .join(Task.assignees)
+                .where(ProjectMember.id.in_(member_ids))
+                .where(Task.is_archived.is_(False))
+                .where(Task.is_deleted.is_(False))
+            )
+            signals["parallel_tasks_count"] = parallel_tasks_count or 0
+        else:
+            signals["parallel_tasks_count"] = 0
+
+        return signals
+
+    @track(name="run_task_risk_assessment", project_name="Agentick")
+    async def analyze_task(self, task_id: str) -> RiskSnapshot:
+        """
+        Executes programmatic gate analysis, calls LLM to synthesize recommendation and saves RiskSnapshot.
+        """
+        task = self.db.get(Task, task_id)
+        if not task:
+            raise ValueError(f"Task with ID {task_id} not found.")
+
+        # Calculate raw signals programmatically
+        signals = self.calculate_programmatic_signals(task)
+
+        # Call OpenRouter via CustomAgent to perform analysis
+        prompt = f"""
+You are the Agentick AI Risk Analyzer. Analyze the following project task signals to determine a precise risk score and detailed recommendation.
+
+Task Meta:
+- Title: "{task.title}"
+- Description: "{task.description or "No description"}"
+- Due Date: {task.due_date}
+
+Calculated Risk Signals:
+{json.dumps(signals, indent=2)}
+
+Requirements:
+- Output a single JSON object containing EXACTLY:
+  1. "risk_score": A float between 0.0 (no risk) and 1.0 (critical danger of missing deadline).
+  2. "risk_level": One of: "low", "medium", "high", "critical".
+  3. "recommendation": A detailed, action-oriented, and personalized recommendation for the Team Lead in English (max 3 sentences).
+- Do not output any additional conversational text or markdown code blocks other than the valid JSON object.
+"""
+        # Execute LLM call
+        headers = {
+            "Authorization": f"Bearer {self.agent.api_key}",
+            "HTTP-Referer": "https://agentick.ai",
+            "X-OpenRouter-Title": "Agentick",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient() as client:
+            payload = {
+                "model": self.agent.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+            }
+            response = await client.post(
+                f"{self.agent.base_url}/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            res_json = response.json()
+            llm_output_text = res_json["choices"][0]["message"]["content"]
+            analysis_result = json.loads(llm_output_text)
+
+            # Log token usage to Opik Span
+            try:
+                from opik import opik_context
+                usage = res_json.get("usage", {})
+                opik_context.update_current_span(
+                    usage={
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0)
+                    }
+                )
+            except Exception as opik_err:
+                print(f"Failed to update Opik span usage: {opik_err}")
+
+        risk_score = analysis_result.get("risk_score", 0.0)
+        risk_level = analysis_result.get("risk_level", "low")
+        recommendation = analysis_result.get("recommendation", "")
+
+        # Save snapshot
+        snapshot = RiskSnapshot(
+            task_id=task.id,
+            risk_score=risk_score,
+            risk_level=risk_level,
+            alert_type="high_risk" if risk_score >= 0.7 else None,
+            signals=signals,
+            recommendation=recommendation,
+            predicted_completion_at=None,
+        )
+        self.db.add(snapshot)
+        self.db.commit()
+        self.db.refresh(snapshot)
+
+        # Trigger proactive email alert if score >= 0.7
+        if risk_score >= 0.7 and not snapshot.alert_sent:
+            # Send alert to assignee(s)
+            for pm in task.assignees:
+                if pm.user and pm.user.email:
+                    try:
+                        due_str = (
+                            task.due_date.strftime("%Y-%m-%d %H:%M")
+                            if task.due_date
+                            else "No deadline"
+                        )
+                        task_link = f"{configs.FRONTEND_URL}/tasks/{task.id}"
+                        send_risk_alert_email(
+                            email_to=pm.user.email,
+                            task_title=task.title,
+                            risk_score=risk_score,
+                            risk_level=risk_level,
+                            due_date=due_str,
+                            recommendation=recommendation,
+                            task_link=task_link,
+                        )
+                        snapshot.alert_sent = True
+                        snapshot.alert_sent_at = datetime.now(timezone.utc)
+                    except Exception as e:
+                        print(f"Error sending email to {pm.user.email}: {e}")
+
+            # Also send to the assigner
+            if task.assigner and task.assigner.user and task.assigner.user.email:
+                try:
+                    due_str = (
+                        task.due_date.strftime("%Y-%m-%d %H:%M")
+                        if task.due_date
+                        else "No deadline"
+                    )
+                    task_link = f"{configs.FRONTEND_URL}/tasks/{task.id}"
+                    send_risk_alert_email(
+                        email_to=task.assigner.user.email,
+                        task_title=task.title,
+                        risk_score=risk_score,
+                        risk_level=risk_level,
+                        due_date=due_str,
+                        recommendation=recommendation,
+                        task_link=task_link,
+                    )
+                except Exception as e:
+                    print(f"Error sending email to assigner: {e}")
+
+            # Commit the update for alert_sent status
+            self.db.commit()
+
+        return snapshot

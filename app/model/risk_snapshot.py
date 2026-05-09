@@ -44,3 +44,16 @@ class RiskSnapshot(BaseModel):
 
     # Relationships
     task: Mapped["Task"] = relationship("Task")
+
+    def __repr__(self) -> str:
+        import json
+        data = {
+            "task_id": self.task_id,
+            "risk_score": self.risk_score,
+            "risk_level": self.risk_level,
+            "alert_type": self.alert_type,
+            "recommendation": self.recommendation,
+            "signals": self.signals,
+            "alert_sent": self.alert_sent,
+        }
+        return json.dumps(data, indent=2, ensure_ascii=False)

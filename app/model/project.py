@@ -18,6 +18,9 @@ class Project(BaseModel):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    timezone: Mapped[str] = mapped_column(
+        String(50), default="Asia/Ho_Chi_Minh", nullable=False
+    )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     team: Mapped["Team"] = relationship("Team", back_populates="projects")

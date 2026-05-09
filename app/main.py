@@ -8,11 +8,16 @@ from app.api.v1.routes import router as v1_router
 from app.core.config import settings
 
 
+from app.core.scheduler import start_scheduler, shutdown_scheduler
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup logic (if any)
+    # Startup logic
+    start_scheduler()
     yield
-    # Shutdown logic (if any)
+    # Shutdown logic
+    shutdown_scheduler()
 
 
 app = FastAPI(title=settings.APP_NAME, version="0.1.0", lifespan=lifespan)
