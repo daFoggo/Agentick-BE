@@ -74,15 +74,29 @@ def get_my_tasks(
     """Lấy danh sách task liên quan đến current user (assignee hoặc assigner)."""
     from sqlalchemy import or_
     from sqlalchemy.orm import joinedload
+    from app.model.project import Project
 
-    query = db.query(Task).filter(
-        Task.is_deleted.is_(False), Task.is_archived.is_(False)
+    query = (
+        db.query(Task)
+        .join(Project, Task.project_id == Project.id)
+        .filter(
+            Task.is_deleted.is_(False),
+            Task.is_archived.is_(False),
+            Project.is_deleted.is_(False),
+        )
     )
+
+    if find_query.team_id__eq:
+        query = query.filter(Project.team_id == find_query.team_id__eq)
 
     user_member_ids = [
         row[0]
         for row in db.query(ProjectMember.id)
-        .filter(ProjectMember.user_id == current_user.id)
+        .join(Project, ProjectMember.project_id == Project.id)
+        .filter(
+            ProjectMember.user_id == current_user.id,
+            Project.is_deleted.is_(False),
+        )
         .all()
     ]
 

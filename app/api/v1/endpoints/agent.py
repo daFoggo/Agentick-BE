@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from datetime import timezone as pytimezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy import select
 
 from app.core.dependencies import get_current_active_user, get_db
@@ -27,7 +27,7 @@ def get_risk_analysis_service(db=Depends(get_db)) -> RiskAnalysisService:
     return RiskAnalysisService(db=db)
 
 
-@router.post("/analyze-risk/{task_id}", response_model=ResponseSchema)
+@router.post("/tasks/{task_id}/risk-analyses", response_model=ResponseSchema)
 async def analyze_task_risk(
     task_id: str,
     current_user: User = Depends(get_current_active_user),
@@ -47,7 +47,34 @@ async def analyze_task_risk(
     )
 
 
-@router.post("/analyze-project-risk/{project_id}", response_model=ResponseSchema)
+@router.post("/outreaches", response_model=ResponseSchema)
+async def trigger_agent_outreach(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Trigger the programmatic stale task and missing data detection cycle,
+    then compose and send personalized outreach emails via Gmail in the background.
+    """
+    from app.core.dependencies import get_database
+    from app.services.agent_outreach_service import AgentOutreachService
+
+    async def run_outreach():
+        try:
+            with get_database().session() as session:
+                service = AgentOutreachService(db=session)
+                await service.run_outreach_cycle()
+        except Exception as e:
+            print(f"Error running outreach cycle in background: {e}")
+
+    background_tasks.add_task(run_outreach)
+    return ResponseSchema(
+        data={"status": "queued"},
+        message="Agent outreach cycle has been queued in background successfully.",
+    )
+
+
+@router.post("/projects/{project_id}/risk-analyses", response_model=ResponseSchema)
 async def analyze_project_risk(
     project_id: str,
     current_user: User = Depends(get_current_active_user),
@@ -60,22 +87,29 @@ async def analyze_project_risk(
     from sqlalchemy.orm import joinedload
     import asyncio
     from app.core.dependencies import get_database
-    
-    tasks = db.query(Task).options(joinedload(Task.status)).filter(
-        Task.project_id == project_id,
-        Task.is_deleted.is_(False),
-        Task.is_archived.is_(False)
-    ).all()
-    
+
+    tasks = (
+        db.query(Task)
+        .options(joinedload(Task.status))
+        .filter(
+            Task.project_id == project_id,
+            Task.is_deleted.is_(False),
+            Task.is_archived.is_(False),
+        )
+        .all()
+    )
+
     active_task_ids = []
     for task in tasks:
         status_name = task.status.name.lower() if task.status else ""
         if status_name not in ["done", "completed"]:
             active_task_ids.append(task.id)
-            
+
     if not active_task_ids:
-        return ResponseSchema(data={"analyzed_count": 0}, message="No active tasks to analyze")
-        
+        return ResponseSchema(
+            data={"analyzed_count": 0}, message="No active tasks to analyze"
+        )
+
     async def analyze_single_task_safely(task_id: str):
         try:
             with get_database().session() as session:
@@ -85,15 +119,20 @@ async def analyze_project_risk(
         except Exception as e:
             print(f"Error analyzing task {task_id}: {e}")
             return False
-            
+
     # Run all analyses in parallel!
-    results = await asyncio.gather(*(analyze_single_task_safely(tid) for tid in active_task_ids))
+    results = await asyncio.gather(
+        *(analyze_single_task_safely(tid) for tid in active_task_ids)
+    )
     count = sum(1 for r in results if r)
-            
-    return ResponseSchema(data={"analyzed_count": count}, message=f"Analyzed {count} tasks in parallel successfully")
+
+    return ResponseSchema(
+        data={"analyzed_count": count},
+        message=f"Analyzed {count} tasks in parallel successfully",
+    )
 
 
-@router.post("/generate-test-data", response_model=ResponseSchema)
+@router.post("/test-data", response_model=ResponseSchema)
 async def generate_test_data(
     user_id: str | None = None,
     project_name: str = "Enterprise ERP Core Platform",
@@ -389,6 +428,40 @@ async def generate_test_data(
     task_auth.assignees = [dev_member]
     db.add(task_auth)
 
+    # Task 5: [Test Phase 2] Missing Estimate Task (triggers High Urgency Data Gap)
+    task_missing_est = Task(
+        project_id=project.id,
+        title="[Test Phase 2] Stripe API Webhook Security Verification",
+        description="Verify security signatures on incoming Stripe webhook events.",
+        status_id=statuses["In Progress"].id,
+        type_id=types["Task"].id,
+        priority_id=priorities["High"].id,
+        assigner_id=lead_member.id,
+        estimated_hours=None,  # No estimate!
+        actual_hours=0.0,
+        due_date=now + timedelta(days=2),
+    )
+    task_missing_est.assignees = [dev_member]
+    db.add(task_missing_est)
+
+    # Task 6: [Test Phase 2] Stale Task & Missing Checkpoint (triggers Stale Task Outreach)
+    task_stale_chk = Task(
+        project_id=project.id,
+        title="[Test Phase 2] Docker Compose Local Cache Tuning",
+        description="Tune file sync caches inside docker-compose setup to optimize rebuilds.",
+        status_id=statuses["In Progress"].id,
+        type_id=types["Task"].id,
+        priority_id=priorities["Medium"].id,
+        assigner_id=lead_member.id,
+        estimated_hours=8.0,
+        actual_hours=1.0,
+        start_date=now - timedelta(days=2),  # started 2 days ago, no checkpoint!
+        due_date=now + timedelta(days=2),
+        updated_at=now - timedelta(hours=26),  # stale!
+    )
+    task_stale_chk.assignees = [dev_member]
+    db.add(task_stale_chk)
+
     db.flush()
 
     # 10. Create Task Checkpoints to trigger AI Risk Signals
@@ -448,6 +521,14 @@ async def generate_test_data(
                 {
                     "id": task_auth.id,
                     "title": task_auth.title,
+                },
+                {
+                    "id": task_missing_est.id,
+                    "title": task_missing_est.title,
+                },
+                {
+                    "id": task_stale_chk.id,
+                    "title": task_stale_chk.title,
                 },
             ],
         },

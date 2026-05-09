@@ -47,6 +47,7 @@ class RiskSnapshot(BaseModel):
 
     def __repr__(self) -> str:
         import json
+
         data = {
             "task_id": self.task_id,
             "risk_score": self.risk_score,

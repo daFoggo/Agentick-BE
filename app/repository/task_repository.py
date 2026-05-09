@@ -25,6 +25,18 @@ class TaskRepository(BaseRepository):
             if auto_commit:
                 session.commit()
                 session.refresh(item)
+
+                # Index in Qdrant
+                from app.utils.qdrant_helper import (
+                    upsert_task_vector,
+                    run_async_background,
+                )
+
+                run_async_background(
+                    upsert_task_vector(
+                        item.id, item.title, item.description, item.project_id
+                    )
+                )
             else:
                 session.flush()
             return item
@@ -42,15 +54,46 @@ class TaskRepository(BaseRepository):
                 raise NotFoundError(detail=f"not found id : {id}")
 
             # Check for status change to record activity
-            if "status_id" in data and data["status_id"] != item.status_id and user_id:
-                activity = TaskActivity(
-                    task_id=id,
-                    user_id=user_id,
-                    field_changed="status",
-                    old_value=item.status_id,
-                    new_value=data["status_id"],
+            if "status_id" in data and data["status_id"] != item.status_id:
+                if user_id:
+                    activity = TaskActivity(
+                        task_id=id,
+                        user_id=user_id,
+                        field_changed="status",
+                        old_value=item.status_id,
+                        new_value=data["status_id"],
+                    )
+                    session.add(activity)
+
+                # Check if the new status is completed
+                from app.model.task_status import TaskStatus
+                from app.model.risk_snapshot import RiskSnapshot
+                from datetime import datetime, timezone
+
+                new_status = (
+                    session.query(TaskStatus).filter_by(id=data["status_id"]).first()
                 )
-                session.add(activity)
+                if new_status and new_status.is_completed:
+                    latest_snapshot = (
+                        session.query(RiskSnapshot)
+                        .filter_by(task_id=id)
+                        .order_by(RiskSnapshot.created_at.desc())
+                        .first()
+                    )
+                    now_utc = datetime.now(timezone.utc)
+                    if latest_snapshot:
+                        latest_snapshot.actual_completed_at = now_utc
+                        if latest_snapshot.predicted_completion_at:
+                            diff = (
+                                now_utc - latest_snapshot.predicted_completion_at
+                            ).total_seconds() / 3600.0
+                            latest_snapshot.prediction_error_hours = diff
+                        elif item.estimated_hours is not None:
+                            latest_snapshot.prediction_error_hours = (
+                                item.actual_hours - item.estimated_hours
+                            )
+                        else:
+                            latest_snapshot.prediction_error_hours = 0.0
 
             for key, value in data.items():
                 setattr(item, key, value)
@@ -65,6 +108,18 @@ class TaskRepository(BaseRepository):
 
             if auto_commit:
                 session.commit()
+
+                # Index in Qdrant
+                from app.utils.qdrant_helper import (
+                    upsert_task_vector,
+                    run_async_background,
+                )
+
+                run_async_background(
+                    upsert_task_vector(
+                        item.id, item.title, item.description, item.project_id
+                    )
+                )
             return self.read_by_id(id, eager=eager)
 
     def read_by_options(self, schema, eager: bool = False):
