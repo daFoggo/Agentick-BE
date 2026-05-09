@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field, ConfigDict
 from app.schema.base_schema import FindBase, ModelBaseInfo
 from app.schema.project_member_schema import ProjectMemberRead
 from app.schema.task_status_schema import TaskStatusRead
+from app.schema.task_type_schema import TaskTypeRead
+from app.schema.task_priority_schema import TaskPriorityRead
 
 
 class TaskBase(BaseModel):
@@ -84,6 +86,9 @@ class TaskRead(ModelBaseInfo):
     is_deleted: bool
     assignees: Optional[List[ProjectMemberRead]] = []
     status: Optional[TaskStatusRead] = None
+    type: Optional[TaskTypeRead] = None
+    priority: Optional[TaskPriorityRead] = None
+    assigner: Optional[ProjectMemberRead] = None
 
     model_config = ConfigDict(from_attributes=True)
 

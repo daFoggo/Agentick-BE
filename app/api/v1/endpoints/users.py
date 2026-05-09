@@ -69,18 +69,61 @@ def search_users(
 def get_my_tasks(
     find_query: TaskFind = Depends(),
     current_user: User = Depends(get_current_active_user),
-    service: TaskService = Depends(get_task_service),
+    db=Depends(get_db),
 ):
-    """Lấy danh sách task được assign cho current user (dùng cho Dashboard Overview)."""
-    scoped_find = find_query.model_copy(
-        update={
-            "assignee_ids__contains": current_user.id,
-            "is_deleted__eq": False,
-            "is_archived__eq": False,
-        }
+    """Lấy danh sách task liên quan đến current user (assignee hoặc assigner)."""
+    from sqlalchemy import or_
+    from sqlalchemy.orm import joinedload
+
+    query = db.query(Task).filter(
+        Task.is_deleted.is_(False), Task.is_archived.is_(False)
     )
-    result = service.get_list_eager(scoped_find)
-    return ResponseSchema(data=result, message="My tasks fetched successfully")
+
+    user_member_ids = [
+        row[0]
+        for row in db.query(ProjectMember.id)
+        .filter(ProjectMember.user_id == current_user.id)
+        .all()
+    ]
+
+    if user_member_ids:
+        query = query.filter(
+            or_(
+                Task.assignees.any(ProjectMember.user_id == current_user.id),
+                Task.assigner_id.in_(user_member_ids),
+            )
+        )
+    else:
+        return ResponseSchema(
+            data={
+                "founds": [],
+                "search_options": {
+                    "page": 1,
+                    "page_size": "all",
+                    "ordering": "-id",
+                    "total_count": 0,
+                },
+            },
+            message="My tasks fetched successfully",
+        )
+
+    for eager_attr in Task.eagers:
+        query = query.options(joinedload(getattr(Task, eager_attr)))
+
+    results = query.order_by(Task.id.desc()).all()
+
+    return ResponseSchema(
+        data={
+            "founds": results,
+            "search_options": {
+                "page": 1,
+                "page_size": "all",
+                "ordering": "-id",
+                "total_count": len(results),
+            },
+        },
+        message="My tasks fetched successfully",
+    )
 
 
 @router.get("/me/stats", response_model=ResponseSchema[dict])

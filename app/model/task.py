@@ -118,4 +118,4 @@ class Task(BaseModel):
     )
     sub_tasks: Mapped[list["Task"]] = relationship("Task", back_populates="parent")
 
-    eagers = ["status", "type", "priority", "assignees", "tags"]
+    eagers = ["status", "type", "priority", "assignees", "tags", "assigner"]
