@@ -108,3 +108,64 @@ def send_agent_outreach_email(
     except Exception as e:
         logger.error(f"Failed to send outreach email to {email_to}: {e}")
         raise e
+
+
+def send_risk_alert_email(
+    email_to: str,
+    task_title: str,
+    risk_score: float,
+    risk_level: str,
+    due_date: str,
+    recommendation: str,
+    task_link: str,
+) -> None:
+    if not configs.SMTP_USER or not configs.SMTP_PASSWORD:
+        logger.warning(
+            f"SMTP configurations are missing. Mock sending risk alert email to {email_to}."
+        )
+        return
+
+    subject = f"⚠️ [Agentick Risk Alert] High Risk Detected on '{task_title}'"
+    html_content = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e11d48; border-radius: 8px;">
+                <h2 style="color: #e11d48; margin-top: 0;">⚠️ High Deadline Risk Detected</h2>
+                <p>Hello,</p>
+                <p>The Agentick AI analyzer has detected a high deadline risk for the task: <b>{task_title}</b>.</p>
+                <div style="background-color: #fff1f2; border-left: 4px solid #e11d48; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 0 0 8px 0;"><b>Risk Score:</b> <code style="font-size: 1.1em; color: #e11d48;">{risk_score:.2f}</code> ({risk_level.upper()})</p>
+                    <p style="margin: 0 0 8px 0;"><b>Deadline:</b> {due_date}</p>
+                    <p style="margin: 0;"><b>AI Recommendation:</b> {recommendation}</p>
+                </div>
+                <p>Click the button below to update progress or adjust resources immediately:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{task_link}" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">
+                        Manage Task
+                    </a>
+                </div>
+                <p>Thanks,<br>The {configs.EMAILS_FROM_NAME} Team</p>
+            </div>
+        </body>
+    </html>
+    """
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"{configs.EMAILS_FROM_NAME} <{configs.SMTP_USER}>"
+    msg["To"] = email_to
+    msg.set_content(
+        f"High Risk Detected!\n\nTask: {task_title}\nRisk Score: {risk_score:.2f} ({risk_level.upper()})\nAI Recommendation: {recommendation}\n\nManage here: {task_link}"
+    )
+    msg.add_alternative(html_content, subtype="html")
+
+    try:
+        server = smtplib.SMTP(configs.SMTP_HOST, configs.SMTP_PORT)
+        server.starttls()
+        server.login(configs.SMTP_USER, configs.SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        logger.info(f"Successfully sent risk alert email to {email_to}")
+    except Exception as e:
+        logger.error(f"Failed to send risk alert email to {email_to}: {e}")
+        raise e

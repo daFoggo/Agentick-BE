@@ -143,6 +143,92 @@ def get_project_task_stats(
     )
 
 
+@router.get("/risk-stats", response_model=ResponseSchema[dict])
+def get_project_risk_stats(
+    project_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db=Depends(get_db),
+):
+    """
+    Get aggregated risk statistics for the dashboard.
+    Calculates overall project risk index, task risk distribution, and risk matrix points.
+    """
+    from app.model.risk_snapshot import RiskSnapshot
+    
+    # Lấy các task đang active trong project
+    active_tasks = db.query(Task).filter(
+        Task.project_id == project_id,
+        Task.is_deleted.is_(False),
+        Task.is_archived.is_(False)
+    ).all()
+    
+    if not active_tasks:
+        return ResponseSchema(data={
+            "overall_risk_index": 0,
+            "tasks": []
+        })
+        
+    task_map = {t.id: t for t in active_tasks}
+    task_ids = list(task_map.keys())
+    
+    # Lấy các risk snapshot mới nhất cho từng task
+    snapshots = db.query(RiskSnapshot).filter(
+        RiskSnapshot.task_id.in_(task_ids)
+    ).order_by(RiskSnapshot.created_at.desc()).all()
+    
+    latest_snapshots = {}
+    for s in snapshots:
+        if s.task_id not in latest_snapshots:
+            latest_snapshots[s.task_id] = s
+            
+    result_tasks = []
+    total_score = 0.0
+    count = 0
+    
+    now = datetime.now(timezone.utc)
+    
+    for task_id, snap in latest_snapshots.items():
+        task = task_map[task_id]
+        
+        # Calculate days remaining
+        days_remaining = 0
+        if task.due_date:
+            delta = task.due_date - now
+            days_remaining = delta.days
+            
+        total_score += snap.risk_score
+        count += 1
+        
+        assignee_name = "Unassigned"
+        # Tránh N+1 hoặc lỗi lazy load assignees bằng cách get assignees manually or just skip it if it throws
+        try:
+            if task.assignees and len(task.assignees) > 0 and task.assignees[0].user:
+                assignee_name = task.assignees[0].user.name
+        except Exception:
+            pass
+            
+        result_tasks.append({
+            "task_id": task.id,
+            "title": task.title,
+            "assignee_name": assignee_name,
+            "estimated_hours": task.estimated_hours or 0,
+            "actual_hours": task.actual_hours or 0,
+            "days_remaining": days_remaining,
+            "risk_score": snap.risk_score,
+            "risk_level": snap.risk_level,
+            "recommendation": snap.recommendation,
+            "signals": snap.signals,
+            "created_at": snap.created_at.isoformat() if snap.created_at else None
+        })
+        
+    overall_risk = (total_score / count) if count > 0 else 0.0
+    
+    return ResponseSchema(data={
+        "overall_risk_index": overall_risk,
+        "tasks": result_tasks
+    }, message="Risk stats fetched successfully")
+
+
 @router.get("/recent-updates", response_model=ResponseSchema[list[dict]])
 def get_recent_status_updates(
     project_id: str,
