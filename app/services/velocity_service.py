@@ -1,30 +1,14 @@
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-from app.model.task_time_log import TaskTimeLog
-from app.model.user import User
-from app.model.task import Task
-from app.model.task_type import TaskType
+from app.repository.task_time_log_repository import TaskTimeLogRepository
 
 
 class VelocityService:
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, task_time_log_repository: TaskTimeLogRepository):
+        self.task_time_log_repository = task_time_log_repository
 
     def get_project_velocity_profile(self, project_id: str):
         # 1. Profile by User
-        user_rows = (
-            self.db.query(
-                User.id,
-                User.name,
-                User.email,
-                func.sum(TaskTimeLog.hours).label("total_hours"),
-                func.count(TaskTimeLog.id).label("log_count"),
-            )
-            .join(TaskTimeLog, TaskTimeLog.user_id == User.id)
-            .join(Task, Task.id == TaskTimeLog.task_id)
-            .filter(Task.project_id == project_id)
-            .group_by(User.id, User.name, User.email)
-            .all()
+        user_rows = self.task_time_log_repository.get_velocity_profile_by_user(
+            project_id
         )
         by_user = [
             {
@@ -39,19 +23,8 @@ class VelocityService:
         ]
 
         # 2. Profile by Task Type
-        type_rows = (
-            self.db.query(
-                TaskType.id,
-                TaskType.name,
-                TaskType.color,
-                func.sum(TaskTimeLog.hours).label("total_hours"),
-                func.count(TaskTimeLog.id).label("log_count"),
-            )
-            .join(Task, Task.type_id == TaskType.id)
-            .join(TaskTimeLog, TaskTimeLog.task_id == Task.id)
-            .filter(Task.project_id == project_id)
-            .group_by(TaskType.id, TaskType.name, TaskType.color)
-            .all()
+        type_rows = self.task_time_log_repository.get_velocity_profile_by_task_type(
+            project_id
         )
         by_task_type = [
             {
@@ -65,12 +38,7 @@ class VelocityService:
         ]
 
         # 3. Profile by Day of the Week
-        logs = (
-            self.db.query(TaskTimeLog.logged_date, TaskTimeLog.hours)
-            .join(Task, Task.id == TaskTimeLog.task_id)
-            .filter(Task.project_id == project_id)
-            .all()
-        )
+        logs = self.task_time_log_repository.get_logs_for_project(project_id)
 
         day_names = [
             "Monday",

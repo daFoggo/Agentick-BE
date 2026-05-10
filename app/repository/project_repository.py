@@ -24,3 +24,20 @@ class ProjectRepository(BaseRepository):
             if team_id:
                 query = query.filter(Project.team_id == team_id)
             return query.all()
+
+    def cleanup_project_resources_on_delete(self, project_id: str):
+        from app.model.task import Task
+        from app.model.event import Event
+
+        with self.session_factory() as session:
+            tasks = (
+                session.query(Task)
+                .filter(Task.project_id == project_id, Task.is_deleted.is_(False))
+                .all()
+            )
+            for task in tasks:
+                task.is_deleted = True
+                session.query(Event).filter(Event.task_id == task.id).delete(
+                    synchronize_session=False
+                )
+            session.commit()

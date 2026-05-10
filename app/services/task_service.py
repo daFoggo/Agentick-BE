@@ -3,55 +3,16 @@ from app.services.base_service import BaseService
 
 
 class TaskService(BaseService):
-    def __init__(self, repository: Any) -> None:
+    def __init__(self, repository: Any, project_member_repo: Any = None) -> None:
         super().__init__(repository)
+        self.project_member_repo = project_member_repo
 
     def add(self, schema: Any) -> Any:
         result = super().add(schema)
         if hasattr(schema, "assignee_ids") and schema.assignee_ids:
-            with self._repository.session_factory() as session:
-                from app.model.project_member import ProjectMember
-                from app.model.project import Project
-                from app.model.team import Team
-                from app.model.notification import (
-                    Notification,
-                    NotificationType,
-                    NotificationStatus,
-                )
-
-                project = session.query(Project).filter_by(id=result.project_id).first()
-                team = (
-                    session.query(Team).filter_by(id=project.team_id).first()
-                    if project
-                    else None
-                )
-
-                members = (
-                    session.query(ProjectMember)
-                    .filter(ProjectMember.id.in_(schema.assignee_ids))
-                    .all()
-                )
-                for member in members:
-                    notification = Notification(
-                        user_id=member.user_id,
-                        title="New Task Assigned",
-                        content=f"You have been assigned to task '{result.title}' in project '{project.name if project else 'Unknown'}' ({team.name if team else 'Unknown Team'})",
-                        type=NotificationType.TASK_ASSIGNED,
-                        status=NotificationStatus.ACTIVE,
-                        is_read=False,
-                        resource_id=result.id,
-                        resource_type="task",
-                        data={
-                            "task_id": result.id,
-                            "task_title": result.title,
-                            "project_id": result.project_id,
-                            "project_name": project.name if project else None,
-                            "team_id": project.team_id if project else None,
-                            "team_name": team.name if team else None,
-                        },
-                    )
-                    session.add(notification)
-                session.commit()
+            self._repository.create_task_assignment_notifications(
+                result.id, schema.assignee_ids
+            )
         return self.get_by_id(result.id)
 
     def get_list(self, schema: Any) -> Any:
@@ -66,10 +27,8 @@ class TaskService(BaseService):
 
     def patch(self, id: str, schema: Any, user_id: str = None) -> Any:
         old_assignee_ids = set()
-        with self._repository.session_factory() as session:
-            old_task = session.query(self._repository.model).filter_by(id=id).first()
-            if old_task:
-                old_assignee_ids = {a.id for a in old_task.assignees}
+        if hasattr(schema, "assignee_ids") and schema.assignee_ids is not None:
+            old_assignee_ids = self._repository.get_task_assignee_ids(id)
 
         result = self._repository.update(id, schema, eager=True, user_id=user_id)
 
@@ -77,51 +36,9 @@ class TaskService(BaseService):
             new_assignee_ids = set(schema.assignee_ids)
             added_ids = new_assignee_ids - old_assignee_ids
             if added_ids:
-                with self._repository.session_factory() as session:
-                    from app.model.project_member import ProjectMember
-                    from app.model.project import Project
-                    from app.model.team import Team
-                    from app.model.notification import (
-                        Notification,
-                        NotificationType,
-                        NotificationStatus,
-                    )
-
-                    project = (
-                        session.query(Project).filter_by(id=result.project_id).first()
-                    )
-                    team = (
-                        session.query(Team).filter_by(id=project.team_id).first()
-                        if project
-                        else None
-                    )
-
-                    members = (
-                        session.query(ProjectMember)
-                        .filter(ProjectMember.id.in_(added_ids))
-                        .all()
-                    )
-                    for member in members:
-                        notification = Notification(
-                            user_id=member.user_id,
-                            title="New Task Assigned",
-                            content=f"You have been assigned to task '{result.title}' in project '{project.name if project else 'Unknown'}' ({team.name if team else 'Unknown Team'})",
-                            type=NotificationType.TASK_ASSIGNED,
-                            status=NotificationStatus.ACTIVE,
-                            is_read=False,
-                            resource_id=result.id,
-                            resource_type="task",
-                            data={
-                                "task_id": result.id,
-                                "task_title": result.title,
-                                "project_id": result.project_id,
-                                "project_name": project.name if project else None,
-                                "team_id": project.team_id if project else None,
-                                "team_name": team.name if team else None,
-                            },
-                        )
-                        session.add(notification)
-                    session.commit()
+                self._repository.create_task_assignment_notifications(
+                    result.id, list(added_ids)
+                )
         return result
 
     def patch_attr(self, id: str, attr: str, value: Any, user_id: str = None) -> Any:
@@ -139,3 +56,145 @@ class TaskService(BaseService):
             eager=True,
         )
         return result["founds"]
+
+    def get_my_tasks(self, user_id: str, team_id: str | None = None):
+        if not self.project_member_repo:
+            return []
+        user_member_ids = self.project_member_repo.get_member_ids_by_user(user_id)
+        if not user_member_ids:
+            return []
+        return self._repository.get_my_tasks_complex(
+            user_id=user_id, user_member_ids=user_member_ids, team_id=team_id
+        )
+
+    def get_project_stats(self, project_id: str, period: str):
+        from datetime import datetime, timedelta, timezone
+        from app.schema.task_schema import ProjectTaskStats, TaskStatItem
+
+        now = datetime.now(timezone.utc)
+        delta = timedelta(days=7) if period == "weekly" else timedelta(days=30)
+        date_from = now - delta
+        date_to = now
+
+        priority_rows, status_rows, type_rows = (
+            self._repository.get_project_task_stats_raw(project_id, date_from, date_to)
+        )
+
+        by_priority = [
+            TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3])
+            for r in priority_rows
+        ]
+        by_status = [
+            TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3])
+            for r in status_rows
+        ]
+        by_type = [
+            TaskStatItem(id=r[0], name=r[1], color=r[2], count=r[3]) for r in type_rows
+        ]
+
+        return ProjectTaskStats(
+            by_priority=by_priority,
+            by_status=by_status,
+            by_type=by_type,
+            period=period,
+            date_from=date_from.date().isoformat(),
+            date_to=date_to.date().isoformat(),
+        )
+
+    def get_risk_stats(self, project_id: str):
+        from datetime import datetime, timezone
+
+        active_tasks, snapshots = self._repository.get_project_risk_data(project_id)
+
+        if not active_tasks:
+            return {"overall_risk_index": 0, "tasks": []}
+
+        task_map = {t.id: t for t in active_tasks}
+        latest_snapshots = {}
+        for s in snapshots:
+            if s.task_id not in latest_snapshots:
+                latest_snapshots[s.task_id] = s
+
+        result_tasks = []
+        total_score = 0.0
+        count = 0
+        now = datetime.now(timezone.utc)
+
+        for task_id, snap in latest_snapshots.items():
+            task = task_map[task_id]
+            days_remaining = 0
+            if task.due_date:
+                delta = task.due_date - now
+                days_remaining = delta.days
+
+            total_score += snap.risk_score
+            count += 1
+
+            assignee_name = "Unassigned"
+            try:
+                if (
+                    task.assignees
+                    and len(task.assignees) > 0
+                    and task.assignees[0].user
+                ):
+                    assignee_name = task.assignees[0].user.name
+            except Exception:
+                pass
+
+            result_tasks.append(
+                {
+                    "task_id": task.id,
+                    "title": task.title,
+                    "assignee_name": assignee_name,
+                    "estimated_hours": task.estimated_hours or 0,
+                    "actual_hours": task.actual_hours or 0,
+                    "days_remaining": days_remaining,
+                    "risk_score": snap.risk_score,
+                    "risk_level": snap.risk_level,
+                    "recommendation": snap.recommendation,
+                    "signals": snap.signals,
+                    "created_at": snap.created_at.isoformat()
+                    if snap.created_at
+                    else None,
+                }
+            )
+
+        overall_risk = (total_score / count) if count > 0 else 0.0
+        return {"overall_risk_index": overall_risk, "tasks": result_tasks}
+
+    def get_recent_updates(self, project_id: str, limit: int):
+        activities, status_map = self._repository.get_recent_updates_raw(
+            project_id, limit
+        )
+        results = []
+
+        for activity in activities:
+            old_status = (
+                status_map.get(activity.old_value, {}) if activity.old_value else {}
+            )
+            new_status = (
+                status_map.get(activity.new_value, {}) if activity.new_value else {}
+            )
+
+            results.append(
+                {
+                    "id": activity.id,
+                    "task_id": activity.task_id,
+                    "task_title": activity.task.title
+                    if activity.task
+                    else "Unknown Task",
+                    "user_id": activity.user_id,
+                    "user_name": activity.user.name if activity.user else "System",
+                    "field_changed": activity.field_changed,
+                    "old_value": activity.old_value,
+                    "new_value": activity.new_value,
+                    "old_status_name": old_status.get("name"),
+                    "old_status_color": old_status.get("color"),
+                    "new_status_name": new_status.get("name"),
+                    "new_status_color": new_status.get("color"),
+                    "created_at": activity.created_at.isoformat()
+                    if activity.created_at
+                    else None,
+                }
+            )
+        return results

@@ -1,17 +1,12 @@
 from contextlib import nullcontext
-from datetime import datetime, timedelta, timezone
 from typing import List, Literal
 from pydantic import BaseModel as PydanticBaseModel
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, distinct
+from fastapi import APIRouter, Depends, Query, BackgroundTasks
 
 from app.core.dependencies import get_current_active_user, get_db
 from app.core.exceptions import DuplicatedError
 from app.model.user import User
-from app.model.task import Task, task_assignee
-from app.model.project_member import ProjectMember
-from app.model.task_status import TaskStatus
 from app.repository.project_member_repository import ProjectMemberRepository
 from app.repository.project_repository import ProjectRepository
 from app.repository.team_member_repository import TeamMemberRepository
@@ -19,6 +14,8 @@ from app.repository.team_repository import TeamRepository
 from app.repository.task_status_repository import TaskStatusRepository
 from app.repository.task_type_repository import TaskTypeRepository
 from app.repository.task_priority_repository import TaskPriorityRepository
+from app.repository.task_repository import TaskRepository
+from app.repository.task_time_log_repository import TaskTimeLogRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.project_member_schema import (
     ProjectMemberCreate,
@@ -35,16 +32,16 @@ from app.schema.project_schema import (
     ProjectUpdate,
 )
 from app.schema.task_schema import (
-    MemberWorkload,
     ProjectWorkloadResponse,
     TaskRead,
-    WorkloadDataPoint,
 )
 from app.services.project_member_service import ProjectMemberService
 from app.services.project_service import ProjectService
 from app.services.invitation_service import InvitationService
 from app.api.v1.endpoints.invitations import get_invitation_service
 from app.services.task_service import TaskService
+from app.services.velocity_service import VelocityService
+from app.services.estimation_service import EstimationService
 from app.api.v1.endpoints.project_tasks import get_task_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -196,6 +193,7 @@ def remove_project_member(
 def generate_project_invitation(
     project_id: str,
     schema: ProjectInviteGenerateRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     project_service: ProjectService = Depends(get_project_service),
     project_member_service: ProjectMemberService = Depends(get_project_member_service),
@@ -221,6 +219,7 @@ def generate_project_invitation(
         project_id=project_id,
         team_id=project.team_id,
         target_name=project.name,
+        background_tasks=background_tasks,
     )
     return ResponseSchema(
         data=ProjectInviteTokenResponse(token=invitation.id),
@@ -256,102 +255,15 @@ def get_project_member_workload(
     project_id: str,
     period: Literal["weekly", "monthly"] = Query(default="weekly"),
     current_user: User = Depends(get_current_active_user),
-    db=Depends(get_db),
+    service: ProjectMemberService = Depends(get_project_member_service),
 ):
     """
     Workload của từng member trong project — số task/ngày theo tuần hoặc tháng.
     Dùng cho biểu đồ ProjectWorkload trên Dashboard.
     """
-    from sqlalchemy import cast, Date as SADate
-
-    now = datetime.now(timezone.utc)
-
-    # weekly = 7 ngày qua, monthly = 30 ngày qua
-    delta = timedelta(days=7) if period == "weekly" else timedelta(days=30)
-    date_from = now - delta
-    date_to = now
-
-    # Lấy tất cả member của project (join với user để lấy thông tin)
-    from sqlalchemy.orm import joinedload
-
-    members = (
-        db.query(ProjectMember)
-        .options(joinedload(ProjectMember.user))
-        .filter(ProjectMember.project_id == project_id)
-        .all()
-    )
-
-    result_members: list[MemberWorkload] = []
-
-    for member in members:
-        user = member.user
-
-        # Convert UTC → local time (Asia/Ho_Chi_Minh = UTC+7) trước khi cast sang Date
-        # để tránh lệch ngày với task được done lúc trước 7am Vietnam time
-        local_day_expr = cast(
-            func.timezone("Asia/Ho_Chi_Minh", Task.updated_at), SADate
-        ).label("day")
-
-        # Query: đếm task DONE được assign cho member, nhóm theo ngày local
-        rows = (
-            db.query(
-                local_day_expr,
-                func.count(distinct(Task.id)).label("task_count"),
-            )
-            .join(task_assignee, task_assignee.c.task_id == Task.id)
-            .join(TaskStatus, Task.status_id == TaskStatus.id)
-            .filter(
-                Task.project_id == project_id,
-                task_assignee.c.project_member_id == member.id,
-                Task.is_deleted.is_(False),
-                Task.is_archived.is_(False),
-                # Lấy task done: is_completed=True HOẶC tên status là "Done" (fallback)
-                (
-                    TaskStatus.is_completed.is_(True)
-                    | (func.lower(TaskStatus.name) == "done")
-                ),
-                Task.updated_at >= date_from,
-                Task.updated_at < date_to,
-            )
-            .group_by(local_day_expr)
-            .order_by(local_day_expr)
-            .all()
-        )
-
-        # Map từ DB → dict để lookup nhanh
-        count_by_day: dict[str, int] = {str(row.day): row.task_count for row in rows}
-
-        # Fill đầy đủ mỗi ngày trong range (kể cả ngày = 0 task done)
-        # Dùng local date (UTC+7) để tránh lệch ngày
-        vn_offset = timedelta(hours=7)
-        local_start = (date_from + vn_offset).date()
-        local_end = (date_to + vn_offset).date() + timedelta(days=1)  # inclusive today
-
-        series: list[WorkloadDataPoint] = []
-        current_day = local_start
-        while current_day < local_end:
-            day_str = current_day.isoformat()
-            series.append(
-                WorkloadDataPoint(date=day_str, task_count=count_by_day.get(day_str, 0))
-            )
-            current_day += timedelta(days=1)
-
-        result_members.append(
-            MemberWorkload(
-                user_id=user.id,
-                name=user.name,
-                avatar_url=user.avatar_url,
-                series=series,
-            )
-        )
-
+    result = service.get_project_member_workload(project_id, period)
     return ResponseSchema(
-        data=ProjectWorkloadResponse(
-            members=result_members,
-            period=period,
-            date_from=date_from.date().isoformat(),
-            date_to=date_to.date().isoformat(),
-        ),
+        data=result,
         message="Member workload fetched successfully",
     )
 
@@ -361,15 +273,22 @@ class EstimateTaskRequest(PydanticBaseModel):
     description: str | None = None
 
 
+def get_velocity_service(db=Depends(get_db)) -> VelocityService:
+    repo = TaskTimeLogRepository(lambda: nullcontext(db))
+    return VelocityService(task_time_log_repository=repo)
+
+
+def get_estimation_service(db=Depends(get_db)) -> EstimationService:
+    repo = TaskRepository(lambda: nullcontext(db))
+    return EstimationService(task_repository=repo)
+
+
 @router.get("/{project_id}/velocity-profile", response_model=ResponseSchema[dict])
 def get_project_velocity_profile(
     project_id: str,
     current_user: User = Depends(get_current_active_user),
-    db=Depends(get_db),
+    service: VelocityService = Depends(get_velocity_service),
 ):
-    from app.services.velocity_service import VelocityService
-
-    service = VelocityService(db)
     result = service.get_project_velocity_profile(project_id)
     return ResponseSchema(
         data=result, message="Project velocity profile fetched successfully"
@@ -381,10 +300,7 @@ async def estimate_project_task(
     project_id: str,
     schema: EstimateTaskRequest,
     current_user: User = Depends(get_current_active_user),
-    db=Depends(get_db),
+    service: EstimationService = Depends(get_estimation_service),
 ):
-    from app.services.estimation_service import EstimationService
-
-    service = EstimationService(db)
     result = await service.estimate_task(project_id, schema.title, schema.description)
     return ResponseSchema(data=result, message="Task estimate generated successfully")

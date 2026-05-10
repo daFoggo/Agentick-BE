@@ -1,20 +1,20 @@
 import json
-import httpx
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
-from sqlalchemy import select, desc, func
-from sqlalchemy.orm import Session
-from opik import track
 
-from app.services.base_service import BaseService
+from opik import track
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session
+
 from app.agents.custom_agent import CustomAgent
+from app.core.config import configs
+from app.model.project_member import ProjectMember
+from app.model.risk_snapshot import RiskSnapshot
 from app.model.task import Task
 from app.model.task_checkpoint import TaskCheckpoint
 from app.model.work_schedule import WorkSchedule
-from app.model.risk_snapshot import RiskSnapshot
-from app.model.project_member import ProjectMember
+from app.services.base_service import BaseService
 from app.utils.email import send_risk_alert_email
-from app.core.config import configs
 
 
 class RiskAnalysisService(BaseService):
@@ -190,99 +190,119 @@ Requirements:
      * DO NOT offer technical advice, code implementations, or specific technology recommendations (e.g., do NOT suggest Terraform, Helm, specific libraries, or dev-level task instructions).
 - Do not output any additional conversational text or markdown code blocks other than the valid JSON object.
 """
-        # Execute LLM call
-        headers = {
-            "Authorization": f"Bearer {self.agent.api_key}",
-            "HTTP-Referer": "https://agentick.ai",
-            "X-OpenRouter-Title": "Agentick",
-            "Content-Type": "application/json",
-        }
+        # Execute LLM call via Strategy
+        res_json = await self.agent.strategy.generate_chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
 
-        async with httpx.AsyncClient() as client:
-            payload = {
-                "model": self.agent.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"},
-            }
-            response = await client.post(
-                f"{self.agent.base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            res_json = response.json()
+        llm_output_text = None
+        if "choices" in res_json and len(res_json["choices"]) > 0:
+            llm_output_text = res_json["choices"][0].get("message", {}).get("content")
 
-            llm_output_text = None
-            if "choices" in res_json and len(res_json["choices"]) > 0:
-                llm_output_text = (
-                    res_json["choices"][0].get("message", {}).get("content")
-                )
+        # Robust JSON extraction and parsing
+        analysis_result = {}
+        if llm_output_text:
+            clean_text = llm_output_text.strip()
+            import re
 
-            # Robust JSON extraction and parsing
-            analysis_result = {}
-            if llm_output_text:
-                clean_text = llm_output_text.strip()
-                import re
+            # Strip markdown code blocks if present
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", clean_text, re.DOTALL)
+            if match:
+                clean_text = match.group(1)
+            else:
+                start_idx = clean_text.find("{")
+                end_idx = clean_text.rfind("}")
+                if start_idx != -1 and end_idx != -1:
+                    clean_text = clean_text[start_idx : end_idx + 1]
 
-                # Strip markdown code blocks if present
-                match = re.search(
-                    r"```(?:json)?\s*(\{.*?\})\s*```", clean_text, re.DOTALL
-                )
-                if match:
-                    clean_text = match.group(1)
-                else:
-                    start_idx = clean_text.find("{")
-                    end_idx = clean_text.rfind("}")
-                    if start_idx != -1 and end_idx != -1:
-                        clean_text = clean_text[start_idx : end_idx + 1]
-
+            def try_parse(txt):
                 try:
-                    # strict=False permits control characters (like newlines) inside JSON values
-                    analysis_result = json.loads(clean_text, strict=False)
-                except Exception as parse_err:
-                    print(
-                        f"JSON Parse Error: {parse_err}. Raw LLM Output: {llm_output_text}"
-                    )
+                    return json.loads(txt, strict=False)
+                except Exception:
+                    return None
 
-            # Safe programmatic fallback if parsing fails or LLM output is empty
+            # Phase 1: Direct Standard Load
+            analysis_result = try_parse(clean_text)
+
+            # Phase 2: Cleansing Attempt (Handle escaped quotes, single quotes, trailing garbage)
             if not analysis_result:
-                has_bottleneck = signals.get("has_schedule_bottleneck", False)
-                is_blocked = signals.get("is_blocked", False)
+                cleansed = clean_text.replace('\\"', '"').replace("'", '"')
+                if cleansed.count("{") > 0 and cleansed.count("}") > 0:
+                    first_brace = cleansed.find("{")
+                    last_brace = cleansed.rfind("}")
+                    analysis_result = try_parse(cleansed[first_brace : last_brace + 1])
 
-                if is_blocked:
-                    risk_score = 0.95
-                    risk_level = "critical"
-                    recommendation = "The task is currently blocked. The Team Lead should immediately engage with stakeholders to resolve dependencies and unblock progress."
-                elif has_bottleneck:
-                    risk_score = 0.80
-                    risk_level = "high"
-                    recommendation = "A potential scheduling bottleneck has been detected. Consider reallocating available resources to ensure the task stays on track."
-                else:
-                    risk_score = 0.40
-                    risk_level = "medium"
-                    recommendation = "Monitor task progress daily to ensure that the remaining hours are logged correctly."
+            # Phase 3: Ultimate Regex Extraction (Indestructible scrapers for crazy hallucinations)
+            if not analysis_result:
+                try:
+                    extracted = {}
+                    score_match = re.search(
+                        r"risk_score[^\d.]*(\d\.\d+|\d+)", clean_text
+                    )
+                    if score_match:
+                        extracted["risk_score"] = float(score_match.group(1))
 
-                analysis_result = {
-                    "risk_score": risk_score,
-                    "risk_level": risk_level,
-                    "recommendation": recommendation,
+                    lvl_match = re.search(
+                        r"risk_level[^a-zA-Z]*(low|medium|high|critical)",
+                        clean_text,
+                        re.IGNORECASE,
+                    )
+                    if lvl_match:
+                        extracted["risk_level"] = lvl_match.group(1).lower()
+
+                    rec_match = re.search(
+                        r"recommendation[\"'\\]*[:\s]+[\"']([^\"'\\]+)", clean_text
+                    )
+                    if rec_match:
+                        extracted["recommendation"] = rec_match.group(1).strip()
+
+                    if "risk_score" in extracted or "risk_level" in extracted:
+                        analysis_result = extracted
+                except Exception:
+                    pass
+
+            if not analysis_result:
+                print(f"ABSOLUTE JSON FAILURE on Raw LLM Output: {llm_output_text}")
+
+        # Safe programmatic fallback if parsing fails or LLM output is empty
+        if not analysis_result:
+            has_bottleneck = signals.get("has_schedule_bottleneck", False)
+            is_blocked = signals.get("is_blocked", False)
+
+            if is_blocked:
+                risk_score = 0.95
+                risk_level = "critical"
+                recommendation = "The task is currently blocked. The Team Lead should immediately engage with stakeholders to resolve dependencies and unblock progress."
+            elif has_bottleneck:
+                risk_score = 0.80
+                risk_level = "high"
+                recommendation = "A potential scheduling bottleneck has been detected. Consider reallocating available resources to ensure the task stays on track."
+            else:
+                risk_score = 0.40
+                risk_level = "medium"
+                recommendation = "Monitor task progress daily to ensure that the remaining hours are logged correctly."
+
+            analysis_result = {
+                "risk_score": risk_score,
+                "risk_level": risk_level,
+                "recommendation": recommendation,
+            }
+
+        # Log token usage to Opik Span
+        try:
+            from opik import opik_context
+
+            usage = res_json.get("usage", {})
+            opik_context.update_current_span(
+                usage={
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
                 }
-
-            # Log token usage to Opik Span
-            try:
-                from opik import opik_context
-
-                usage = res_json.get("usage", {})
-                opik_context.update_current_span(
-                    usage={
-                        "prompt_tokens": usage.get("prompt_tokens", 0),
-                        "completion_tokens": usage.get("completion_tokens", 0),
-                        "total_tokens": usage.get("total_tokens", 0),
-                    }
-                )
-            except Exception as opik_err:
-                print(f"Failed to update Opik span usage: {opik_err}")
+            )
+        except Exception as opik_err:
+            print(f"Failed to update Opik span usage: {opik_err}")
 
         risk_score = analysis_result.get("risk_score", 0.0)
         risk_level = analysis_result.get("risk_level", "low")

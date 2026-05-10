@@ -7,6 +7,7 @@ from app.repository.team_repository import TeamRepository
 from app.repository.task_status_repository import TaskStatusRepository
 from app.repository.task_type_repository import TaskTypeRepository
 from app.repository.task_priority_repository import TaskPriorityRepository
+from app.repository.unit_of_work import UnitOfWork
 from app.schema.project_schema import ProjectCreate, ProjectFind, ProjectUpdate
 from app.schema.project_member_schema import ProjectMemberFind
 from app.schema.team_member_schema import TeamMemberFind
@@ -49,8 +50,8 @@ class ProjectService(BaseService):
         if allow_roles and role not in allow_roles:
             raise AuthError(detail="Insufficient privileges for this action.")
 
-    def _seed_project_catalogs(self, project_id: str):
-        """Seed default TaskStatus, TaskType, and TaskPriority for a new project."""
+    def _seed_project_catalogs_via_uow(self, uow: UnitOfWork, project_id: str):
+        """Seed default TaskStatus, TaskType, and TaskPriority for a new project via UnitOfWork."""
 
         def _mark_single_default(
             items: list[dict],
@@ -116,7 +117,7 @@ class ProjectService(BaseService):
             completed_index=5,
         )
         for status in statuses:
-            self._task_status_repository.create(status)
+            uow.task_statuses.create(status, auto_commit=False)
 
         # Default Task Types
         types = _mark_single_default(
@@ -160,7 +161,7 @@ class ProjectService(BaseService):
             default_index=0,
         )
         for task_type in types:
-            self._task_type_repository.create(task_type)
+            uow.task_types.create(task_type, auto_commit=False)
 
         # Default Task Priorities
         priorities = _mark_single_default(
@@ -204,23 +205,34 @@ class ProjectService(BaseService):
             default_index=2,
         )
         for priority in priorities:
-            self._task_priority_repository.create(priority)
+            uow.task_priorities.create(priority, auto_commit=False)
 
     def create_project(self, schema: ProjectCreate, current_user: User):
         self._ensure_user_in_team(
             schema.team_id, current_user.id, allow_roles={"owner", "manager"}
         )
-        project = self._repository.create(schema)
-        self._project_member_repository.create(
-            {
-                "project_id": project.id,
-                "user_id": current_user.id,
-                "role": "owner",
-            }
-        )
-        # Seed default catalogs for the new project
-        self._seed_project_catalogs(project.id)
-        return project
+
+        # Use Unit of Work for atomic transaction across multiple tables
+        with UnitOfWork(self._repository.session_factory) as uow:
+            project = uow.projects.create(schema, auto_commit=False)
+            # Re-inject dynamically assigned ID so we can reference it
+            # even before commit (since flush generates it)
+            uow.project_members.create(
+                {
+                    "project_id": project.id,
+                    "user_id": current_user.id,
+                    "role": "owner",
+                },
+                auto_commit=False,
+            )
+            # Seed default catalogs for the new project
+            self._seed_project_catalogs_via_uow(uow, project.id)
+
+            # Unit of Work automatically commits when exiting the context manager
+            # if no exception occurred.
+
+            # Need to get the actual project model back in local scope for return
+            return project
 
     def get_project_details(self, project_id: str, current_user: User):
         project = self._repository.read_by_id(project_id, eager=True)
@@ -252,23 +264,7 @@ class ProjectService(BaseService):
         )
 
         # Soft-delete all tasks of this project and delete their calendar events
-        with self._repository.session_factory() as session:
-            from app.model.task import Task
-            from app.model.event import Event
-
-            # Find all tasks belonging to this project
-            tasks = (
-                session.query(Task)
-                .filter(Task.project_id == project_id, Task.is_deleted.is_(False))
-                .all()
-            )
-            for task in tasks:
-                task.is_deleted = True
-                # Delete events associated with this task
-                session.query(Event).filter(Event.task_id == task.id).delete(
-                    synchronize_session=False
-                )
-            session.commit()
+        self._repository.cleanup_project_resources_on_delete(project_id)
 
         return self._repository.update_attr(project_id, "is_deleted", True)
 

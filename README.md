@@ -6,10 +6,42 @@ Agentick is an AI Agent-powered project management platform that proactively det
 
 ## 🚀 Installation & Setup
 
-This project uses **Docker** and **Alembic** to ensure a consistent environment and database schema. 
+If you are starting from scratch (no dev tools installed), follow step 0. Otherwise, skip to step 1.
 
-### 1. Environment Configuration
-Create a `.env` file in the root directory (where `docker-compose.yml` is located) with the following variables:
+### 0. Prerequisites & Environment Setup
+
+You need to install these tools to run the project locally:
+
+1. **Git**: To download the source code.
+   - [Download for Windows/Mac/Linux](https://git-scm.com/downloads)
+   - Verify: Open your terminal and run `git --version`
+
+2. **Docker Desktop**: To run the Database and API container smoothly.
+   - [Download Docker Desktop](https://www.docker.com/products/docker-desktop/)
+   - *Make sure Docker is running before moving to the next steps.*
+
+3. **Astral UV**: Our high-speed Python manager (needed for AI tools and code linting).
+   - **Windows (PowerShell):** 
+     ```powershell
+     powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+     ```
+   - **macOS/Linux:** 
+     ```bash
+     curl -LsSf https://astral.sh/uv/install.sh | sh
+     ```
+   - Restart terminal and verify: `uv --version`
+
+---
+
+### 1. Clone the Repository
+Open your terminal (PowerShell, CMD, or Terminal) and run:
+```bash
+git clone https://github.com/daFoggo/Agentick-BE.git
+cd Agentick-BE
+```
+
+### 2. Environment Configuration
+Create a `.env` file in the root folder of the project. Copy and paste the following content:
 ```env
 # Database Credentials
 POSTGRES_USER=agentick_user
@@ -20,33 +52,37 @@ DATABASE_URL=postgresql://agentick_user:agentick_password@db:5432/agentick_db
 # Security
 SECRET_KEY=your_super_secret_key
 ENV=dev
+
+# AI Agent & Observability (Required for AI features)
+OPENROUTER_API_KEY=your_key_here
+OPIK_API_KEY=your_key_here
+OPIK_WORKSPACE=your_workspace
 ```
 > [!IMPORTANT]
 > Never commit the `.env` file to version control.
 
-### 2. Starting the System with Docker
-We use Docker Compose to orchestrate the API and Database containers.
+### 3. Starting the System with Docker
+Run this command to download dependencies and start the system:
 ```bash
 docker compose up -d --build
 ```
-*Wait 5-10 seconds for the database to be ready.*
+*Wait 10-15 seconds for the PostgreSQL database to fully initialize.*
 
-### 3. Database Migrations (Alembic)
-The database starts empty. You must apply migrations to create the tables.
+### 4. Database Migrations (Alembic)
+The database starts empty. Run this command to create all tables and schemas:
 ```bash
 docker exec agentick-be-api alembic upgrade head
 ```
 
-### 4. AI Agent & Observability (OpenRouter & Opik)
-Our backend features an intelligent AI Agent to automate project tasks, monitored via Opik.
-- Configure your OpenRouter and Opik credentials in your `.env` file.
-- To enable the **Opik Agent Playground** with live local pairing, run:
+### 5. AI Agent Playground & Local Running
+Our backend features an intelligent AI Agent, monitored via Opik.
+To enable the **Opik Agent Playground** with live local pairing and reload, run:
 ```bash
 uv run opik endpoint --project "Agentick" -- uv run uvicorn app.main:app --port 8000 --reload
 ```
-For detailed setup and integration, please see the master guide: **[docs/agent_guide.md](docs/agent_guide.md)**.
 
 **Result:** Your API is now live at `http://localhost:8000/docs`.
+
 
 ---
 
@@ -75,6 +111,7 @@ Agentick-BE follows the **Clean Architecture** pattern to separate concerns and 
 - `app/agents/`: AI Agent core reasoning loops, LLM interaction, and copywriting.
 - `app/tools/`: Adapters and external function definitions/execution mapping for LLM.
 - `app/core/`: System-wide configurations (Security, Database, Dependencies).
+- `app/utils/`: Shared helper utilities (Hashing, Email sender, Qdrant helper, Query builders).
 - `migrations/`: Historical records of database schema changes managed by Alembic.
 
 ### Data Flow Example
@@ -142,5 +179,6 @@ We use **Ruff** for lightning-fast linting, formatting, and automatic error fixi
 | **Alembic** | [https://alembic.sqlalchemy.org/](https://alembic.sqlalchemy.org/) |
 | **UV (Package Manager)** | [https://docs.astral.sh/uv/](https://docs.astral.sh/uv/) |
 | **PostgreSQL** | [https://www.postgresql.org/](https://www.postgresql.org/) |
+| **Qdrant** | [https://qdrant.tech/](https://qdrant.tech/) |
 | **Docker** | [https://www.docker.com/](https://www.docker.com/) |
 
