@@ -1,18 +1,23 @@
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-import httpx
 from opik import track
 
 from app.core.config import configs
 from app.schema.agent_schema import AgentMessage
+from app.agents.llm_strategy import LLMStrategy, OpenRouterStrategy
 
 
 class CustomAgent:
-    def __init__(self, api_key: str = None, base_url: str = None, model: str = None):
-        self.api_key = api_key or configs.OPENROUTER_API_KEY
-        self.base_url = base_url or configs.OPENROUTER_BASE_URL
-        self.model = model or configs.OPENROUTER_MODEL
+    def __init__(self, strategy: Optional[LLMStrategy] = None):
+        # Initialize default strategy if none provided
+        if strategy is None:
+            strategy = OpenRouterStrategy(
+                api_key=configs.OPENROUTER_API_KEY,
+                base_url=configs.OPENROUTER_BASE_URL,
+                model=configs.OPENROUTER_MODEL,
+            )
+        self.strategy = strategy
 
     @track(entrypoint=True, name="run_agent_loop", project_name="Agentick")
     async def run(
@@ -37,95 +42,76 @@ class CustomAgent:
             messages.append(msg.model_dump(exclude_none=True))
         messages.append({"role": "user", "content": prompt})
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "https://agentick.ai",
-            "X-OpenRouter-Title": "Agentick",
-            "Content-Type": "application/json",
-        }
-
         tool_calls_executed = []
 
-        async with httpx.AsyncClient() as client:
-            payload = {
-                "model": self.model,
-                "messages": messages,
-                "tools": tools,
-                "tool_choice": "auto",
-            }
+        # --- CALL 1 ---
+        res_json = await self.strategy.generate_chat_completion(
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+        )
 
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            res_json = response.json()
-            message = res_json["choices"][0]["message"]
+        message = res_json["choices"][0]["message"]
 
-            prompt_tokens = res_json.get("usage", {}).get("prompt_tokens", 0)
-            completion_tokens = res_json.get("usage", {}).get("completion_tokens", 0)
-            total_tokens = res_json.get("usage", {}).get("total_tokens", 0)
+        prompt_tokens = res_json.get("usage", {}).get("prompt_tokens", 0)
+        completion_tokens = res_json.get("usage", {}).get("completion_tokens", 0)
+        total_tokens = res_json.get("usage", {}).get("total_tokens", 0)
 
-            if "tool_calls" in message and message["tool_calls"]:
-                tool_calls = message["tool_calls"]
-                messages.append(message)
+        if "tool_calls" in message and message["tool_calls"]:
+            tool_calls = message["tool_calls"]
+            messages.append(message)
 
-                for tool_call in tool_calls:
-                    func_name = tool_call["function"]["name"]
-                    func_args = json.loads(tool_call["function"]["arguments"])
-                    tool_calls_executed.append(func_name)
+            for tool_call in tool_calls:
+                func_name = tool_call["function"]["name"]
+                func_args = json.loads(tool_call["function"]["arguments"])
+                tool_calls_executed.append(func_name)
 
-                    # execute tool via the executor
-                    tool_result = await tool_executor(func_name, func_args)
+                # execute tool via the executor
+                tool_result = await tool_executor(func_name, func_args)
 
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_call["id"],
-                            "name": func_name,
-                            "content": json.dumps(tool_result),
-                        }
-                    )
-
-                final_payload = {"model": self.model, "messages": messages}
-                final_response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    json=final_payload,
-                    headers=headers,
-                    timeout=30.0,
-                )
-                final_response.raise_for_status()
-                final_res_json = final_response.json()
-                final_content = final_res_json["choices"][0]["message"]["content"]
-
-                prompt_tokens += final_res_json.get("usage", {}).get("prompt_tokens", 0)
-                completion_tokens += final_res_json.get("usage", {}).get(
-                    "completion_tokens", 0
-                )
-                total_tokens += final_res_json.get("usage", {}).get("total_tokens", 0)
-            else:
-                final_content = message["content"]
-
-            # Log token usage to Opik Span
-            try:
-                from opik import opik_context
-
-                opik_context.update_current_span(
-                    usage={
-                        "prompt_tokens": prompt_tokens,
-                        "completion_tokens": completion_tokens,
-                        "total_tokens": total_tokens,
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "name": func_name,
+                        "content": json.dumps(tool_result),
                     }
                 )
-            except Exception as opik_err:
-                print(f"Failed to update Opik span usage: {opik_err}")
 
-            return {
-                "response": final_content,
-                "tool_calls_executed": tool_calls_executed,
-            }
+            # --- CALL 2 ---
+            final_res_json = await self.strategy.generate_chat_completion(
+                messages=messages,
+                tools=None,
+            )
+
+            final_content = final_res_json["choices"][0]["message"]["content"]
+
+            prompt_tokens += final_res_json.get("usage", {}).get("prompt_tokens", 0)
+            completion_tokens += final_res_json.get("usage", {}).get(
+                "completion_tokens", 0
+            )
+            total_tokens += final_res_json.get("usage", {}).get("total_tokens", 0)
+        else:
+            final_content = message["content"]
+
+        # Log token usage to Opik Span
+        try:
+            from opik import opik_context
+
+            opik_context.update_current_span(
+                usage={
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                }
+            )
+        except Exception as opik_err:
+            print(f"Failed to update Opik span usage: {opik_err}")
+
+        return {
+            "response": final_content,
+            "tool_calls_executed": tool_calls_executed,
+        }
 
     @track(name="compose_outreach_email", project_name="Agentick")
     async def compose_outreach_email(
@@ -155,39 +141,22 @@ Requirements:
 - Explain why this information is needed (e.g., to enable automated deadline prediction and risk detection).
 - End with a friendly closing call-to-action to update directly.
 """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "https://agentick.ai",
-            "X-OpenRouter-Title": "Agentick",
-            "Content-Type": "application/json",
-        }
-        async with httpx.AsyncClient() as client:
-            payload = {
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=30.0,
+        messages = [{"role": "user", "content": prompt}]
+        res_json = await self.strategy.generate_chat_completion(messages=messages)
+
+        # Log token usage to Opik Span
+        try:
+            from opik import opik_context
+
+            usage = res_json.get("usage", {})
+            opik_context.update_current_span(
+                usage={
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                }
             )
-            response.raise_for_status()
-            res_json = response.json()
+        except Exception as opik_err:
+            print(f"Failed to update Opik span usage: {opik_err}")
 
-            # Log token usage to Opik Span
-            try:
-                from opik import opik_context
-
-                usage = res_json.get("usage", {})
-                opik_context.update_current_span(
-                    usage={
-                        "prompt_tokens": usage.get("prompt_tokens", 0),
-                        "completion_tokens": usage.get("completion_tokens", 0),
-                        "total_tokens": usage.get("total_tokens", 0),
-                    }
-                )
-            except Exception as opik_err:
-                print(f"Failed to update Opik span usage: {opik_err}")
-
-            return res_json["choices"][0]["message"]["content"]
+        return res_json["choices"][0]["message"]["content"]

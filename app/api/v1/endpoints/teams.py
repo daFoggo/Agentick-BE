@@ -1,6 +1,6 @@
 from contextlib import nullcontext
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 
 from app.core.dependencies import get_db, get_current_active_user
 from app.core.exceptions import DuplicatedError
@@ -176,6 +176,7 @@ def remove_team_member(
 def generate_team_invitation(
     team_id: str,
     schema: TeamInviteGenerateRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     team_service: TeamService = Depends(get_team_service),
     team_member_service: TeamMemberService = Depends(get_team_member_service),
@@ -200,6 +201,7 @@ def generate_team_invitation(
         role=schema.role,
         team_id=team_id,
         target_name=team.name,
+        background_tasks=background_tasks,
     )
     # Return fake token just to not break existing FE types temporarily. We will remove this later if needed.
     return ResponseSchema(

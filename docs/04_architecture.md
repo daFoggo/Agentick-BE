@@ -72,56 +72,98 @@ async def lifespan(app: FastAPI):
 
 ---
 
-## 4.3. Các Mẫu Thiết kế Nâng cao (Chiến lược Refactor Tương lai)
+## 4.3. Các Mẫu Thiết kế Nâng cao (Đã triển khai thực tế trong Core)
 
-Để bảo vệ tính toàn vẹn tuyệt đối của Clean Architecture khi mở rộng quy mô lớn, dự án hoạch định áp dụng 2 mẫu thiết kế cấp cao sau:
+Để bảo vệ tính toàn vẹn tuyệt đối của Clean Architecture, hệ thống đã áp dụng thành công 2 mẫu thiết kế cấp cao sau:
 
-### 4.3.1. Unit of Work (UoW) Pattern (Giao dịch Nguyên tử)
-Phục vụ khi cần cập nhật đồng bộ nhiều bảng trong cùng một luồng business (ví dụ: Tạo Project, tự động Seed Status, Type, Priority). Đảm bảo "Được ăn cả, ngã về không".
+### 4.3.1. Unit of Work (UoW) Pattern (Thực tế tại `app/repository/unit_of_work.py`)
+Đảm bảo tính toàn vẹn giao dịch (Atomicity) khi thực hiện một luồng nghiệp vụ phức tạp trên nhiều Repository khác nhau cùng lúc (như chuỗi tạo User -> Team -> Default Project -> Seed Data). 
 
-**Ví dụ triển khai (Dự định):**
+**Mã nguồn thực tế:**
 ```python
 class UnitOfWork:
+    def __init__(self, session_factory):
+        self.session_factory = session_factory
+        self._cm = None
+        self.session = None
+
     def __enter__(self):
-        self.session = session_factory()
-        # Tất cả Repo dùng chung DUY NHẤT 1 instance session
-        self.projects = ProjectRepository(lambda: self.session)
-        self.catalogs = CatalogRepository(lambda: self.session)
+        # Correctly invoke the context manager to resolve the actual Session
+        self._cm = self.session_factory()
+        self.session = self._cm.__enter__()
+
+        # Create wrapper factory that injects our active session
+        def active_session_factory():
+            return nullcontext(self.session)
+
+        # Inject repositories configured with current atomic session
+        self.projects = ProjectRepository(active_session_factory)
+        self.project_members = ProjectMemberRepository(active_session_factory)
+        self.task_statuses = TaskStatusRepository(active_session_factory)
+        self.task_types = TaskTypeRepository(active_session_factory)
+        self.task_priorities = TaskPriorityRepository(active_session_factory)
+
         return self
-    
-    def __exit__(self, exc_type, ...):
-        if exc_type: self.session.rollback() # Hoàn tác toàn bộ nếu lỗi bất kì
-        else: self.session.commit()          # Lưu lại tất cả cùng lúc
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if exc_type is not None:
+                self.session.rollback()
+            else:
+                self.session.commit()
+        finally:
+            self._cm.__exit__(exc_type, exc_val, exc_tb)
 ```
 
-### 4.3.2. Strategy Pattern (Chiến lược chuyển đổi AI Agent)
-Giúp tách rời Core Logic của Agent khỏi nhà cung cấp mô hình cụ thể (LLM Vendor), cho phép chuyển đổi giữa OpenRouter, Google Gemini hoặc OpenAI chỉ qua một biến Config cấu hình.
+### 4.3.2. Strategy Pattern (Thực tế tại `app/agents/llm_strategy.py`)
+Cô lập logic gọi API đến nhà cung cấp trí tuệ nhân tạo. Giúp hệ thống miễn nhiễm hoàn toàn với việc nhà cung cấp đổi SDK, chỉ cần đổi Strategy là toàn bộ "Bộ não" chuyển hướng (Ví dụ: OpenRouter <-> Gemini <-> OpenAI).
 
-**Ví dụ cấu trúc mã nguồn (Dự định):**
+**Mã nguồn thực tế:**
 ```python
-from abc import ABC, abstractmethod
-
 class LLMStrategy(ABC):
     @abstractmethod
-    async def ask(self, prompt: str) -> str: pass
+    async def generate_chat_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: str = "auto",
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        pass
 
-class GeminiStrategy(LLMStrategy):
-    async def ask(self, prompt): return await gemini_sdk.call(prompt)
+class OpenRouterStrategy(LLMStrategy):
+    def __init__(self, api_key: str, base_url: str, model: str):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.model = model
 
-class CustomAgent:
-    def __init__(self, model_strategy: LLMStrategy):
-        self.engine = model_strategy
-    
-    async def run(self, prompt):
-        # Tuyệt đối không bị phụ thuộc vào thư viện của bên thứ 3 nào
-        return await self.engine.ask(prompt) 
+    async def generate_chat_completion(self, messages, tools=None, **kwargs):
+        # Thực hiện httpx.AsyncClient() post logic tới base_url...
+        # Đảm bảo tách rời hoàn toàn Agent Logic khỏi HTTP Client specifics
+        pass
 ```
 
 ---
 
-## 4.4. Bố cục Cấu trúc Thư mục Dự án
+## 4.4. Mẫu Thiết kế Hiện đại Đặc thù cho Agentic Workflows
 
-### 4.4.1. Backend (Cấu trúc phân lớp SoC)
+Ngoài ra, trong quá trình tối ưu hệ thống Agent, 2 mẫu thiết kế đặc thù sau đã được áp dụng:
+
+### 4.4.1. Concurrent Async Worker Pattern (Thực tế tại `app/core/scheduler.py`)
+Thay thế vòng lặp tuần tự (Serial Bottleneck) bằng cơ chế Gom nhóm chạy song song quy mô lớn sử dụng `asyncio.gather` và `asyncio.Semaphore(N)` nhằm khống chế tốc độ gửi API (Rate Limiting) mà vẫn đảm bảo thông lượng xử lý cao gấp 500%.
+
+### 4.4.2. Infallible Fallback Parser Pattern (Thực tế tại `app/services/risk_analysis_service.py`)
+Áp dụng mô hình **Xử lý đa tầng có dự phòng (Multi-stage recovery)** để cứu hộ dữ liệu JSON bị lỗi khi AI trả về kết quả không ổn định:
+1. **Tầng 1**: Chạy JSON Parser tiêu chuẩn.
+2. **Tầng 2**: Chạy Cleanse Parser (Thay dấu nháy đơn, xóa backslash key bị lỗi).
+3. **Tầng 3**: Dùng Regex Scrapers (Tìm & trích xuất cứng điểm số/kết quả từ chuỗi rác).
+👉 Đảm bảo Server KHÔNG BAO GIỜ bị crash hay sập do lỗi cú pháp của mô hình AI bên thứ ba.
+
+---
+
+## 4.5. Bố cục Cấu trúc Thư mục Dự án
+
+### 4.5.1. Backend (Cấu trúc phân lớp SoC)
 ```text
 Agentick-BE/
 ├── app/

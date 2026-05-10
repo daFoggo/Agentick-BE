@@ -1,17 +1,20 @@
+import asyncio
 import os
 import smtplib
+from datetime import date, datetime
+from datetime import timezone as pytimezone
 from email.message import EmailMessage
-from datetime import date, datetime, timezone as pytimezone
-from pytz import timezone
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select, func
+from pytz import timezone
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
-from app.core.dependencies import get_database
 from app.core.config import configs
-from app.model.task import Task
+from app.core.dependencies import get_database
 from app.model.project import Project
 from app.model.risk_snapshot import RiskSnapshot
+from app.model.task import Task
 from app.services.risk_analysis_service import RiskAnalysisService
 
 # Run the scheduler consistently on UTC, using dynamic offsets per job
@@ -36,31 +39,36 @@ async def morning_scan_job():
         analyzer = RiskAnalysisService(db)
         now_utc = datetime.now(pytimezone.utc)
 
-        for task in tasks:
-            status_name = task.status.name.lower() if task.status else ""
-            if status_name in ["done", "completed"]:
-                continue
+        sem = asyncio.Semaphore(5)  # Prevent overwhelming API Rate Limits
 
-            # Determine task localized time
+        async def process_task(t_obj):
+            # Early filter conditions
+            status_name = t_obj.status.name.lower() if t_obj.status else ""
+            if status_name in ["done", "completed"]:
+                return
+
             proj_tz_name = (
-                task.project.timezone
-                if (task.project and task.project.timezone)
+                t_obj.project.timezone
+                if (t_obj.project and t_obj.project.timezone)
                 else "Asia/Ho_Chi_Minh"
             )
             try:
                 proj_tz = timezone(proj_tz_name)
                 localized_now = now_utc.astimezone(proj_tz)
             except Exception:
-                # Fallback to Saigon if timezone name is invalid
                 proj_tz = timezone("Asia/Ho_Chi_Minh")
                 localized_now = now_utc.astimezone(proj_tz)
 
-            # Check if it is currently 9:00 AM in the project's local time
+            # Check if it's 9 AM in the project timezone
             if localized_now.hour == 9:
-                try:
-                    await analyzer.analyze_task(task.id)
-                except Exception as ex:
-                    print(f"Error analyzing task {task.id}: {ex}")
+                async with sem:
+                    try:
+                        await analyzer.analyze_task(t_obj.id)
+                    except Exception as ex:
+                        print(f"Error analyzing task {t_obj.id}: {ex}")
+
+        # Fire off all analysis processes concurrently
+        await asyncio.gather(*[process_task(task) for task in tasks])
 
 
 async def evening_summary_job():

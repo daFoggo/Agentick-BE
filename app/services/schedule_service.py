@@ -1,3 +1,4 @@
+from typing import Any
 from app.repository.work_schedule_repository import WorkScheduleRepository
 from app.schema.schedule_schema import WorkScheduleCreate
 from app.services.base_service import BaseService
@@ -7,9 +8,23 @@ class ScheduleService(BaseService):
     def __init__(
         self,
         work_schedule_repository: WorkScheduleRepository,
+        team_member_repository: Any = None,
     ) -> None:
         super().__init__(work_schedule_repository)
         self._work_schedule_repo = work_schedule_repository
+        self._team_member_repo = team_member_repository
+
+    def get_team_patterns(self, team_id: str):
+        if not self._team_member_repo:
+            return []
+        members = self._team_member_repo.read_by_options({"team_id__eq": team_id})[
+            "founds"
+        ]
+        results = []
+        for m in members:
+            patterns = self.get_user_patterns(m.user_id)
+            results.append({"user_id": m.user_id, "patterns": patterns})
+        return results
 
     def get_user_patterns(self, user_id: str):
         """

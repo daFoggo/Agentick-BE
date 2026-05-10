@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from app.model.user import User
 from app.repository.user_repository import UserRepository
 from app.repository.team_member_repository import TeamMemberRepository
@@ -6,6 +7,7 @@ from app.schema.user_schema import UserSearchResult
 from app.schema.team_member_schema import TeamMemberFind
 from app.schema.project_member_schema import ProjectMemberFind
 from app.repository.project_member_repository import ProjectMemberRepository
+from app.repository.task_repository import TaskRepository
 
 
 class UserService:
@@ -14,10 +16,12 @@ class UserService:
         user_repository: UserRepository,
         team_member_repository: TeamMemberRepository | None = None,
         project_member_repository: ProjectMemberRepository | None = None,
+        task_repository: TaskRepository | None = None,
     ) -> None:
         self._user_repository = user_repository
         self._team_member_repository = team_member_repository
         self._project_member_repository = project_member_repository
+        self._task_repository = task_repository
 
     @staticmethod
     def to_user_info(user: User) -> UserInfo:
@@ -60,3 +64,30 @@ class UserService:
             exclude_user_ids=ids_to_exclude if ids_to_exclude else None,
         )
         return [UserSearchResult.model_validate(u) for u in users]
+
+    def get_user_stats(self, user_id: str, period: str) -> dict:
+        now = datetime.now(timezone.utc)
+        delta = timedelta(days=7) if period == "weekly" else timedelta(days=30)
+        since = now - delta
+
+        if not self._project_member_repository or not self._task_repository:
+            return {"tasks_completed": 0, "collaborated_with": 0, "period": period}
+
+        user_member_ids = self._project_member_repository.get_member_ids_by_user(
+            user_id
+        )
+        if not user_member_ids:
+            return {"tasks_completed": 0, "collaborated_with": 0, "period": period}
+
+        tasks_completed = self._task_repository.get_user_completed_tasks_count(
+            user_member_ids, since
+        )
+        collaborated_with = self._task_repository.get_user_collaborators_count(
+            user_member_ids, since
+        )
+
+        return {
+            "tasks_completed": tasks_completed,
+            "collaborated_with": collaborated_with,
+            "period": period,
+        }

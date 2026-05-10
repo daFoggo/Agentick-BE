@@ -18,7 +18,10 @@ router = APIRouter(prefix="/schedules", tags=["schedules"])
 
 def get_schedule_service(db=Depends(get_db)) -> ScheduleService:
     work_repo = WorkScheduleRepository(lambda: nullcontext(db))
-    return ScheduleService(work_schedule_repository=work_repo)
+    team_member_repo = TeamMemberRepository(lambda: nullcontext(db))
+    return ScheduleService(
+        work_schedule_repository=work_repo, team_member_repository=team_member_repo
+    )
 
 
 @router.get("/me", response_model=ResponseSchema[List[WorkScheduleRead]])
@@ -51,16 +54,9 @@ def upsert_my_pattern(
 def get_team_patterns(
     team_id: str,
     service: ScheduleService = Depends(get_schedule_service),
-    db=Depends(get_db),
 ):
     """
     Get 7-day recurring patterns for all members of a team.
     """
-    team_member_repo = TeamMemberRepository(lambda: nullcontext(db))
-    members = team_member_repo.read_by_options({"team_id__eq": team_id})["founds"]
-
-    results = []
-    for m in members:
-        patterns = service.get_user_patterns(m.user_id)
-        results.append({"user_id": m.user_id, "patterns": patterns})
+    results = service.get_team_patterns(team_id)
     return ResponseSchema(data=results)

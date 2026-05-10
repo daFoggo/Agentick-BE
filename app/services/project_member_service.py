@@ -195,3 +195,63 @@ class ProjectMemberService(BaseService):
             ProjectMemberFind(project_id__eq=project_id, user_id__eq=user_id)
         )
         return bool(member.get("founds"))
+
+    def get_project_member_workload(self, project_id: str, period: str):
+        from datetime import datetime, timedelta, timezone
+        from app.schema.task_schema import (
+            MemberWorkload,
+            ProjectWorkloadResponse,
+            WorkloadDataPoint,
+        )
+
+        now = datetime.now(timezone.utc)
+        delta = timedelta(days=7) if period == "weekly" else timedelta(days=30)
+        date_from = now - delta
+        date_to = now
+
+        member_raw_data = self._repository.get_member_workload_raw(
+            project_id, date_from, date_to
+        )
+
+        result_members: list[MemberWorkload] = []
+
+        for member, rows in member_raw_data:
+            user = member.user
+            if not user:
+                continue
+
+            count_by_day: dict[str, int] = {
+                str(row.day): row.task_count for row in rows
+            }
+
+            # Fill range fully
+            vn_offset = timedelta(hours=7)
+            local_start = (date_from + vn_offset).date()
+            local_end = (date_to + vn_offset).date() + timedelta(days=1)
+
+            series: list[WorkloadDataPoint] = []
+            current_day = local_start
+            while current_day < local_end:
+                day_str = current_day.isoformat()
+                series.append(
+                    WorkloadDataPoint(
+                        date=day_str, task_count=count_by_day.get(day_str, 0)
+                    )
+                )
+                current_day += timedelta(days=1)
+
+            result_members.append(
+                MemberWorkload(
+                    user_id=user.id,
+                    name=user.name,
+                    avatar_url=user.avatar_url,
+                    series=series,
+                )
+            )
+
+        return ProjectWorkloadResponse(
+            members=result_members,
+            period=period,
+            date_from=date_from.date().isoformat(),
+            date_to=date_to.date().isoformat(),
+        )

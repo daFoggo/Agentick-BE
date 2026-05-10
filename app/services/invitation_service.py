@@ -1,5 +1,4 @@
 import logging
-import threading
 from fastapi import HTTPException, status
 from app.model.user import User
 from app.model.invitation import Invitation, InvitationStatus
@@ -155,6 +154,7 @@ class InvitationService:
         team_id: str = None,
         project_id: str = None,
         target_name: str = None,
+        background_tasks=None,
     ) -> Invitation:
         # Create invitation record
         invitation_data = {
@@ -167,7 +167,7 @@ class InvitationService:
         }
         created_invitation = self.invitation_repository.create(invitation_data)
 
-        # Send email in background thread
+        # Prepare notification / email
         target_type = "project" if project_id else "team"
 
         # Create notification if user already exists
@@ -185,9 +185,23 @@ class InvitationService:
 
         invite_link = f"{configs.FRONTEND_URL}/invite/accept?id={created_invitation.id}"
 
-        threading.Thread(
-            target=send_invitation_email,
-            args=(email, inviter.name, target_name, invite_link, target_type),
-        ).start()
+        # Utilize FastAPI's BackgroundTasks for proper observer-style pattern
+        if background_tasks:
+            background_tasks.add_task(
+                send_invitation_email,
+                email,
+                inviter.name,
+                target_name,
+                invite_link,
+                target_type,
+            )
+        else:
+            # Fallback to basic threading if invoked outside API layer
+            import threading
+
+            threading.Thread(
+                target=send_invitation_email,
+                args=(email, inviter.name, target_name, invite_link, target_type),
+            ).start()
 
         return created_invitation

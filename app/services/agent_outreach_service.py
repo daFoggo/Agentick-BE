@@ -147,16 +147,18 @@ class AgentOutreachService:
         outreaches_sent = []
         now_utc = datetime.now(timezone.utc)
 
+        import asyncio
+        jobs = []
+
         for task in tasks:
             status_name = task.status.name.lower() if task.status else ""
             if status_name in ["done", "completed", "todo"]:
                 continue
 
-            # Skip if there are no assignees assigned to this task
             if not task.assignees:
                 continue
 
-            # Check gaps and stale status
+            # Fast local compute checks
             gap_report = self.assess_data_gap(task)
             stale_alert = self.should_send_stale_alert(task)
 
@@ -184,73 +186,98 @@ class AgentOutreachService:
                 )
 
             if should_outreach and outreach_type:
-                days_to_deadline = (
-                    (task.due_date - now_utc).days if task.due_date else 0
-                )
+                days_to_deadline = (task.due_date - now_utc).days if task.due_date else 0
                 hours_stale = (now_utc - task.updated_at).total_seconds() / 3600
 
                 for assignee in task.assignees:
                     user_obj = assignee.user
                     if not user_obj or not user_obj.email:
                         continue
+                    
+                    # Queue this job for parallel execution
+                    jobs.append({
+                        "task": task,
+                        "user_obj": user_obj,
+                        "days_to_deadline": days_to_deadline,
+                        "hours_stale": hours_stale,
+                        "outreach_type": outreach_type,
+                        "gaps": gaps_to_report
+                    })
 
-                    # Compose email via LLM CustomAgent
+        if not jobs:
+            return []
+
+        sem = asyncio.Semaphore(5) # Rate limit concurrency
+
+        async def process_outreach_job(job):
+            async with sem:
+                t = job["task"]
+                u = job["user_obj"]
+                try:
+                    # 1. Async AI Call (High Latency)
                     email_body = await self.agent.compose_outreach_email(
-                        task_title=task.title,
-                        due_date=str(task.due_date),
-                        days_to_deadline=days_to_deadline,
-                        hours_stale=hours_stale,
-                        assignee_name=user_obj.name,
-                        gaps=gaps_to_report,
+                        task_title=t.title,
+                        due_date=str(t.due_date),
+                        days_to_deadline=job["days_to_deadline"],
+                        hours_stale=job["hours_stale"],
+                        assignee_name=u.name,
+                        gaps=job["gaps"],
                     )
 
-                    subject = f"Action Required: Update for '{task.title}'"
-                    task_link = f"https://agentick.app/tasks/{task.id}"
+                    subj = f"Action Required: Update for '{t.title}'"
+                    lnk = f"https://agentick.app/tasks/{t.id}"
 
-                    # Send email
+                    # 2. Dispatch Email
                     send_agent_outreach_email(
-                        email_to=user_obj.email,
-                        subject=subject,
+                        email_to=u.email,
+                        subject=subj,
                         body_content=email_body,
-                        task_link=task_link,
+                        task_link=lnk,
                     )
+                    
+                    return {
+                        "success": True,
+                        "task_id": t.id,
+                        "user_id": u.id,
+                        "email": u.email,
+                        "outreach_type": job["outreach_type"],
+                        "email_body": email_body
+                    }
+                except Exception as ex:
+                    print(f"Failed parallel outreach for task {t.id}: {ex}")
+                    return {"success": False}
 
-                    # Log outreach record
-                    outreach_log = AgentOutreach(
-                        task_id=task.id,
-                        user_id=user_obj.id,
-                        outreach_type=outreach_type,
-                        channel="email",
-                        sent_at=now_utc,
-                    )
-                    self.db.add(outreach_log)
+        # Execute all network calls simultaneously
+        results = await asyncio.gather(*[process_outreach_job(j) for j in jobs])
 
-                    # Create or update RiskSnapshot for memory
-                    snapshot = RiskSnapshot(
-                        task_id=task.id,
-                        risk_score=0.8 if outreach_type == "missing_estimate" else 0.6,
-                        risk_level="high"
-                        if outreach_type == "missing_estimate"
-                        else "medium",
-                        alert_type="data_gap"
-                        if outreach_type == "missing_estimate"
-                        else "stale",
-                        alert_sent=True,
-                        alert_sent_at=now_utc,
-                        signals=[f"Outreach sent due to: {outreach_type}"],
-                        recommendation="Prompt user to input accurate estimations & checkpoints.",
-                    )
-                    self.db.add(snapshot)
+        # Process valid payloads into DB
+        for r in results:
+            if r and r.get("success"):
+                tid = r["task_id"]
+                uid = r["user_id"]
+                otyp = r["outreach_type"]
+                
+                outreach_log = AgentOutreach(
+                    task_id=tid,
+                    user_id=uid,
+                    outreach_type=otyp,
+                    channel="email",
+                    sent_at=now_utc,
+                )
+                self.db.add(outreach_log)
 
-                    outreaches_sent.append(
-                        {
-                            "task_id": task.id,
-                            "user_id": user_obj.id,
-                            "outreach_type": outreach_type,
-                            "email": user_obj.email,
-                            "email_body": email_body,
-                        }
-                    )
+                snapshot = RiskSnapshot(
+                    task_id=tid,
+                    risk_score=0.8 if otyp == "missing_estimate" else 0.6,
+                    risk_level="high" if otyp == "missing_estimate" else "medium",
+                    alert_type="data_gap" if otyp == "missing_estimate" else "stale",
+                    alert_sent=True,
+                    alert_sent_at=now_utc,
+                    signals=[f"Outreach sent due to: {otyp}"],
+                    recommendation="Prompt user to input accurate estimations & checkpoints.",
+                )
+                self.db.add(snapshot)
+                outreaches_sent.append(r)
 
         if outreaches_sent:
             self.db.commit()
