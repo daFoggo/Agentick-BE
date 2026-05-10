@@ -131,6 +131,29 @@ class RiskAnalysisService(BaseService):
         else:
             signals["parallel_tasks_count"] = 0
 
+        # 5. Feedback Loop Calibration (Error history)
+        if assignees:
+            user_id = assignees[0].user_id
+            completed_snapshots = self.db.scalars(
+                select(RiskSnapshot)
+                .join(Task, Task.id == RiskSnapshot.task_id)
+                .join(Task.assignees)
+                .where(ProjectMember.user_id == user_id)
+                .where(RiskSnapshot.prediction_error_hours.is_not(None))
+            ).all()
+
+            if completed_snapshots:
+                errors = [s.prediction_error_hours for s in completed_snapshots]
+                avg_error = sum(errors) / len(errors)
+                signals["assignee_avg_prediction_error_hours"] = avg_error
+                signals["assignee_underestimation_tendency"] = avg_error > 2.0
+            else:
+                signals["assignee_avg_prediction_error_hours"] = 0.0
+                signals["assignee_underestimation_tendency"] = False
+        else:
+            signals["assignee_avg_prediction_error_hours"] = 0.0
+            signals["assignee_underestimation_tendency"] = False
+
         return signals
 
     @track(name="run_task_risk_assessment", project_name="Agentick")
@@ -147,7 +170,7 @@ class RiskAnalysisService(BaseService):
 
         # Call OpenRouter via CustomAgent to perform analysis
         prompt = f"""
-You are the Agentick AI Risk Analyzer. Analyze the following project task signals to determine a precise risk score and detailed recommendation.
+You are the Agentick AI Project Manager (PM) Assistant. Analyze the following project task signals to determine a precise risk score and a high-level managerial recommendation for the Team Lead.
 
 Task Meta:
 - Title: "{task.title}"
@@ -161,7 +184,10 @@ Requirements:
 - Output a single JSON object containing EXACTLY:
   1. "risk_score": A float between 0.0 (no risk) and 1.0 (critical danger of missing deadline).
   2. "risk_level": One of: "low", "medium", "high", "critical".
-  3. "recommendation": A detailed, action-oriented, and personalized recommendation for the Team Lead in English (max 3 sentences).
+  3. "recommendation": A high-level managerial recommendation for the Team Lead in English.
+     * Keep it extremely brief and concise (maximum 2 sentences, under 40 words).
+     * Focus ONLY on managerial advice: reallocating resources, adjusting schedules, communicating with stakeholders, or unblocking team members.
+     * DO NOT offer technical advice, code implementations, or specific technology recommendations (e.g., do NOT suggest Terraform, Helm, specific libraries, or dev-level task instructions).
 - Do not output any additional conversational text or markdown code blocks other than the valid JSON object.
 """
         # Execute LLM call
@@ -186,18 +212,73 @@ Requirements:
             )
             response.raise_for_status()
             res_json = response.json()
-            llm_output_text = res_json["choices"][0]["message"]["content"]
-            analysis_result = json.loads(llm_output_text)
+
+            llm_output_text = None
+            if "choices" in res_json and len(res_json["choices"]) > 0:
+                llm_output_text = (
+                    res_json["choices"][0].get("message", {}).get("content")
+                )
+
+            # Robust JSON extraction and parsing
+            analysis_result = {}
+            if llm_output_text:
+                clean_text = llm_output_text.strip()
+                import re
+
+                # Strip markdown code blocks if present
+                match = re.search(
+                    r"```(?:json)?\s*(\{.*?\})\s*```", clean_text, re.DOTALL
+                )
+                if match:
+                    clean_text = match.group(1)
+                else:
+                    start_idx = clean_text.find("{")
+                    end_idx = clean_text.rfind("}")
+                    if start_idx != -1 and end_idx != -1:
+                        clean_text = clean_text[start_idx : end_idx + 1]
+
+                try:
+                    # strict=False permits control characters (like newlines) inside JSON values
+                    analysis_result = json.loads(clean_text, strict=False)
+                except Exception as parse_err:
+                    print(
+                        f"JSON Parse Error: {parse_err}. Raw LLM Output: {llm_output_text}"
+                    )
+
+            # Safe programmatic fallback if parsing fails or LLM output is empty
+            if not analysis_result:
+                has_bottleneck = signals.get("has_schedule_bottleneck", False)
+                is_blocked = signals.get("is_blocked", False)
+
+                if is_blocked:
+                    risk_score = 0.95
+                    risk_level = "critical"
+                    recommendation = "The task is currently blocked. The Team Lead should immediately engage with stakeholders to resolve dependencies and unblock progress."
+                elif has_bottleneck:
+                    risk_score = 0.80
+                    risk_level = "high"
+                    recommendation = "A potential scheduling bottleneck has been detected. Consider reallocating available resources to ensure the task stays on track."
+                else:
+                    risk_score = 0.40
+                    risk_level = "medium"
+                    recommendation = "Monitor task progress daily to ensure that the remaining hours are logged correctly."
+
+                analysis_result = {
+                    "risk_score": risk_score,
+                    "risk_level": risk_level,
+                    "recommendation": recommendation,
+                }
 
             # Log token usage to Opik Span
             try:
                 from opik import opik_context
+
                 usage = res_json.get("usage", {})
                 opik_context.update_current_span(
                     usage={
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),
-                        "total_tokens": usage.get("total_tokens", 0)
+                        "total_tokens": usage.get("total_tokens", 0),
                     }
                 )
             except Exception as opik_err:

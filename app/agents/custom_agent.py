@@ -21,7 +21,7 @@ class CustomAgent:
         prompt: str,
         history: List[AgentMessage],
         tools: List[Dict[str, Any]],
-        tool_executor: Any,
+        tool_executor: str,
     ) -> Dict[str, Any]:
         system_instruction = (
             "You are Agentick AI Assistant, a smart agent helping with project management. "
@@ -64,6 +64,10 @@ class CustomAgent:
             res_json = response.json()
             message = res_json["choices"][0]["message"]
 
+            prompt_tokens = res_json.get("usage", {}).get("prompt_tokens", 0)
+            completion_tokens = res_json.get("usage", {}).get("completion_tokens", 0)
+            total_tokens = res_json.get("usage", {}).get("total_tokens", 0)
+
             if "tool_calls" in message and message["tool_calls"]:
                 tool_calls = message["tool_calls"]
                 messages.append(message)
@@ -95,8 +99,28 @@ class CustomAgent:
                 final_response.raise_for_status()
                 final_res_json = final_response.json()
                 final_content = final_res_json["choices"][0]["message"]["content"]
+
+                prompt_tokens += final_res_json.get("usage", {}).get("prompt_tokens", 0)
+                completion_tokens += final_res_json.get("usage", {}).get(
+                    "completion_tokens", 0
+                )
+                total_tokens += final_res_json.get("usage", {}).get("total_tokens", 0)
             else:
                 final_content = message["content"]
+
+            # Log token usage to Opik Span
+            try:
+                from opik import opik_context
+
+                opik_context.update_current_span(
+                    usage={
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": total_tokens,
+                    }
+                )
+            except Exception as opik_err:
+                print(f"Failed to update Opik span usage: {opik_err}")
 
             return {
                 "response": final_content,
@@ -150,4 +174,20 @@ Requirements:
             )
             response.raise_for_status()
             res_json = response.json()
+
+            # Log token usage to Opik Span
+            try:
+                from opik import opik_context
+
+                usage = res_json.get("usage", {})
+                opik_context.update_current_span(
+                    usage={
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0),
+                    }
+                )
+            except Exception as opik_err:
+                print(f"Failed to update Opik span usage: {opik_err}")
+
             return res_json["choices"][0]["message"]["content"]

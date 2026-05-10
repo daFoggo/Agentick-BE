@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import List, Literal
+from pydantic import BaseModel as PydanticBaseModel
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, distinct
@@ -353,3 +354,37 @@ def get_project_member_workload(
         ),
         message="Member workload fetched successfully",
     )
+
+
+class EstimateTaskRequest(PydanticBaseModel):
+    title: str
+    description: str | None = None
+
+
+@router.get("/{project_id}/velocity-profile", response_model=ResponseSchema[dict])
+def get_project_velocity_profile(
+    project_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db=Depends(get_db),
+):
+    from app.services.velocity_service import VelocityService
+
+    service = VelocityService(db)
+    result = service.get_project_velocity_profile(project_id)
+    return ResponseSchema(
+        data=result, message="Project velocity profile fetched successfully"
+    )
+
+
+@router.post("/{project_id}/tasks/estimate", response_model=ResponseSchema[dict])
+async def estimate_project_task(
+    project_id: str,
+    schema: EstimateTaskRequest,
+    current_user: User = Depends(get_current_active_user),
+    db=Depends(get_db),
+):
+    from app.services.estimation_service import EstimationService
+
+    service = EstimationService(db)
+    result = await service.estimate_task(project_id, schema.title, schema.description)
+    return ResponseSchema(data=result, message="Task estimate generated successfully")
