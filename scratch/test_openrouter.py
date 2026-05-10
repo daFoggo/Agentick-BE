@@ -33,6 +33,7 @@ def get_env_variable(var_name: str, default: str = None) -> str:
 def test_openrouter():
 
     api_key = get_env_variable("OPENROUTER_API_KEY")
+    base_url = get_env_variable("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     model_name = get_env_variable("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
     if not api_key:
@@ -45,8 +46,9 @@ def test_openrouter():
 
     print("🔑 Đã tìm thấy API Key.")
     print(f"🤖 Model đang sử dụng: {model_name}")
+    print(f"🌐 Base URL đang sử dụng: {base_url}")
 
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    url = f"{base_url}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
