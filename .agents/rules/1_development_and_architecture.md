@@ -4,19 +4,28 @@ This guide defines the architectural standards, development patterns, and code q
 
 ---
 
-## 1. Clean Architecture Pattern
+## 1. Overall Architecture & Base Patterns
 
-Agentick-BE follows the **Clean Architecture** pattern to separate concerns and improve maintainability. Code must be organized into the following layers:
+### 1.1. Modular Monolith Architecture
+The system operates as a **Modular Monolith**. All code runs within a single deployment unit but must remain logically and physically decoupled via clean directory structures (`app/repository`, `app/services`, `app/agents`). This ensures high data consistency while guaranteeing that components (e.g., the AI Agent Core) can be extracted into standalone Microservices later if scale dictates.
 
-* **`app/api/v1/endpoints/`**: Handles HTTP requests, input validation via schemas, dependency injection wiring, and standard response formatting.
-* **`app/services/`**: Implements core business logic, orchestrates transactions, coordinates between repositories, and triggers proactive agent outreach. Inherits from `BaseService`.
-* **`app/repository/`**: Handles database access, queries, and persistence using SQLAlchemy. Inherits from `BaseRepository`.
-* **`app/model/`**: Defines database tables using SQLAlchemy Declarative Style. Inherits from `BaseModel`.
-* **`app/schema/`**: Defines data validation, serialization, and deserialization using Pydantic models.
-* **`app/agents/`**: Contains core AI Agent reasoning loops, ReAct engine, LLM prompting, and copywriting logic.
-* **`app/tools/`**: Implements computer-interface adapters, function schemas, and tool execution maps for the AI Agent.
-* **`app/core/`**: Manages system-wide configurations, database sessions, security (JWT/Hashing), and core dependencies.
-* **`migrations/`**: Contains historical database schema changes managed by Alembic.
+### 1.2. Repository & Service Layer Pattern
+We enforce a strict separation between data access and business orchestration:
+- **Repository Layer (`app/repository/`)**: Inherits from `BaseRepository`. Its exclusive goal is to hide implementation complexities of SQLAlchemy from the rest of the application. Services should interact solely with abstract persistence methods.
+- **Service Layer (`app/services/`)**: Inherits from `BaseService`. Contains purely core business rules and coordinates between multiple repositories and AI outreach actions.
+
+### 1.3. Project Directory Structure (Separation of Concerns)
+Code must be organized strictly according to these designated layers:
+
+* **`app/api/v1/endpoints/`**: Handles HTTP requests, validation, dependency injection wiring, and standard JSON response formatting.
+* **`app/services/`**: Core business logic engine and agent workflow coordination.
+* **`app/repository/`**: Data persistence and SQL concealment logic.
+* **`app/model/`**: Declarative SQLAlchemy Database entities.
+* **`app/schema/`**: Pydantic DTOs for request validation and response serialization.
+* **`app/agents/`**: AI Reasoning loops, core prompt engineering, and LLM client abstraction.
+* **`app/tools/`**: ReAct-based tool execution map and interface schemas for LLM interaction.
+* **`app/core/`**: App-wide orchestration: configs, DB sessions, utility dependencies, and lifespan setup.
+* **`migrations/`**: Alembic revision history.
 
 ---
 
@@ -79,3 +88,29 @@ Ruff's `E712` linter rule warns against using `== False` or `== True` for boolea
   query = session.query(Task).filter(Task.is_deleted == False)  # Causes Ruff E712
   query = session.query(Task).filter(not Task.is_deleted)       # Breaks SQLAlchemy query tree
   ```
+
+---
+
+## 5. Advanced Design Patterns
+
+To maintain strict adherence to **Clean Architecture**, implementation of these patterns is mandatory:
+
+### 5.1. Unit of Work (UoW) Pattern
+Ensures transaction atomicity when multiple related repositories must be written to the database as a single batch (e.g., Atomic Registration flow).
+- **Location**: `app/repository/unit_of_work.py`
+- **Usage**: Always wrap multi-repository operations within a `with UnitOfWork(session_factory) as uow:` context manager. If an error occurs, everything automatically rolls back.
+
+### 5.2. Dependency Injection (DI) Pattern
+Utilize FastAPI's `Depends()` heavily to inject database sessions and services into routers. This abstracts resource life-cycles from core business handlers.
+- **Location**: `app/core/dependencies.py`
+- **Example**:
+  ```python
+  def get_current_user(db: Session = Depends(get_db)) -> User:
+      # Automatically borrows session and handles post-request cleanup
+      pass
+  ```
+
+### 5.3. Lifespan Pattern
+Controls startup and shutdown lifecycle logic for the backend server to cleanly initialize and terminate background processes such as schedulers.
+- **Location**: `app/main.py`
+- **Implementation**: Must utilize `@asynccontextmanager` lifespan on the FastAPI instance to `start_scheduler()` and `shutdown_scheduler()` safely, preventing background thread resource leaks.

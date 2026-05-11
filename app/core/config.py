@@ -1,20 +1,46 @@
 import os
+from enum import Enum
 from pathlib import Path
+from typing import List
 
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class Environment(str, Enum):
+    PROD = "prod"
+    STAGE = "stage"
+    DEV = "dev"
+    TEST = "test"
+
+
+def _get_env_files() -> List[str]:
+    """
+    Helper to determine environment files to load.
+    Prioritizes .env first, then overrides with .env.{ENV} if it exists.
+    """
+    current_env = os.getenv("ENV", "dev")
+    potential_files = [".env", f".env.{current_env}"]
+    existing_files = []
+    for filename in potential_files:
+        file_path = PROJECT_ROOT / filename
+        if file_path.exists():
+            existing_files.append(str(file_path))
+    return existing_files
 
 
 class Settings(BaseSettings):
     # base
     APP_NAME: str = "agentick-be"
     PROJECT_NAME: str = "fca-api"
-    ENV: str = "dev"
+    ENV: Environment = Environment.DEV
     TIMEZONE: str = "Asia/Ho_Chi_Minh"
     API: str = "/api"
     API_V1_STR: str = "/api/v1"
     API_V2_STR: str = "/api/v2"
-    PROJECT_ROOT: str = str(Path(__file__).resolve().parents[2])
+    PROJECT_ROOT: str = str(PROJECT_ROOT)
 
     ENV_DATABASE_MAPPER: dict[str, str] = Field(
         default_factory=lambda: {
@@ -79,7 +105,7 @@ class Settings(BaseSettings):
     ORDERING: str = "-id"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_get_env_files(),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -96,6 +122,18 @@ class Settings(BaseSettings):
     @property
     def DB_ENGINE(self) -> str:
         return self.DB_ENGINE_MAPPER.get(self.DB, "postgresql")
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENV == Environment.PROD
+
+    @property
+    def is_development(self) -> bool:
+        return self.ENV == Environment.DEV
+
+    @property
+    def is_testing(self) -> bool:
+        return self.ENV == Environment.TEST
 
     @computed_field(return_type=str)
     @property
@@ -132,7 +170,7 @@ class Settings(BaseSettings):
 
 
 class TestSettings(Settings):
-    ENV: str = "test"
+    ENV: Environment = Environment.TEST
 
 
 settings: Settings = TestSettings() if os.getenv("ENV", "dev") == "test" else Settings()

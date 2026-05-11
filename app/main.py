@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,9 +7,7 @@ from app.api.v1.routes import router as v1_router
 
 # from app.api.v2.routes import router as v2_router
 from app.core.config import settings
-
-
-from app.core.scheduler import start_scheduler, shutdown_scheduler
+from app.core.scheduler import shutdown_scheduler, start_scheduler
 
 
 @asynccontextmanager
@@ -20,7 +19,15 @@ async def lifespan(app: FastAPI):
     shutdown_scheduler()
 
 
-app = FastAPI(title=settings.APP_NAME, version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title=settings.APP_NAME,
+    version="0.1.0",
+    lifespan=lifespan,
+    # Bật lại đoạn bên dưới khi muốn bảo mật Prod (Ẩn swagger UI):
+    # docs_url=None if settings.is_production else "/docs",
+    # redoc_url=None if settings.is_production else "/redoc",
+    # openapi_url=None if settings.is_production else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,

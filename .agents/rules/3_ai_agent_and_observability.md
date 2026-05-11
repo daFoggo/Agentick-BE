@@ -66,3 +66,26 @@ To debug agent behavior locally with live pairing, use Opik's tunnel endpoint:
 uv run opik endpoint --project "Agentick" -- uv run uvicorn app.main:app --port 8000 --reload
 ```
 This enables the **Status: Paired ✔ (Connected)** state on the Opik Web UI, enabling live interaction and prompt engineering.
+
+---
+
+## 4. Modern AI-Agentic Patterns
+
+### 4.1. Strategy Pattern for LLM Providers
+Isolates third-party LLM specific drivers from core Agent reasoning logic.
+- **Location**: `app/agents/llm_strategy.py`
+- **Rule**: Do not instantiate direct HTTP requests to LLMs in the main loop. Use an implementation inheriting from `LLMStrategy` (e.g., `OpenRouterStrategy`). This ensures switching between OpenRouter, Gemini, or OpenAI only requires switching the dynamic class instance.
+
+### 4.2. Concurrent Async Worker Pattern
+Replaces serial execution bottlenecks with parallel processing using asynchronous concurrency tools.
+- **Location**: `app/core/scheduler.py`
+- **Rule**: For batch analysis (like Daily Risk Scanning), employ `asyncio.gather` paired with `asyncio.Semaphore(limit)` to batch-process multiple tasks simultaneously while strictly guarding against upstream API rate-limits.
+
+### 4.3. Infallible Fallback Parser Pattern
+Uses a multi-stage recovery mechanism to salvage corrupted JSON output from less-stable AI models before erroring.
+- **Location**: `app/services/risk_analysis_service.py`
+- **Workflow**:
+  1. **Level 1**: Standard `json.loads()`
+  2. **Level 2**: Character Cleansing (stripping bad escapes, double-curly braces).
+  3. **Level 3**: Regex Scraping (manually extract exact score/fields via pattern matching).
+- **Result**: Application components must NEVER crash due to syntactic hallucinations from the LLM.
