@@ -16,8 +16,8 @@ def dict_to_sqlalchemy_filter_options(model: type, payload: dict[str, Any]):
         field_name, _, operation = key.partition("__")
         operation = operation or "eq"
 
-        if field_name == "assignee_ids":
-            field_name = "assignees"
+        if field_name == "member_ids":
+            field_name = "task_members"
 
         column = getattr(model, field_name, None)
         if column is None:

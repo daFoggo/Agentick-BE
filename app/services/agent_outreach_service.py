@@ -36,12 +36,25 @@ class AgentOutreachService:
             )
             urgency = "high"
 
-        # 2. Important Gap: Task is active but has no progress checkpoints logged after start date
-        if task.start_date:
-            now_utc = datetime.now(timezone.utc)
-            days_since_start = (now_utc - task.start_date).days
+        # 2. Missing Start Timestamp Reminder
+        now_utc = datetime.now(timezone.utc)
+        if not task.started_at and task.due_date:
+            time_left_hrs = (task.due_date - now_utc).total_seconds() / 3600.0
+            if time_left_hrs <= 48 and time_left_hrs > 0:
+                gaps.append(
+                    {
+                        "field": "started_at",
+                        "question": "This task is nearing its deadline but hasn't been started. Can you mark it as started or let us know if you need help?",
+                        "urgency": "high",
+                    }
+                )
+                urgency = "high"
 
-            # Check if there are checkpoints
+        # 3. Important Gap: Task is active but has no progress checkpoints logged after starting
+        if task.started_at:
+            days_since_start = (now_utc - task.started_at).days
+
+            # Check if there are recent checkpoints
             checkpoints_exist = (
                 self.db.scalar(
                     select(TaskCheckpoint)
@@ -75,12 +88,17 @@ class AgentOutreachService:
 
         now_utc = datetime.now(timezone.utc)
 
-        # Do not send if no due_date or start_date
-        if not task.due_date or not task.start_date:
+        # Do not send if no due_date
+        if not task.due_date:
             return False
 
-        days_to_deadline = (task.due_date - now_utc).days
-        days_since_start = (now_utc - task.start_date).days
+        days_to_deadline = (task.due_date - now_utc).total_seconds() / 86400.0
+
+        # If not started and deadline is near, allow it
+        if not task.started_at:
+            return days_to_deadline <= 2
+
+        days_since_start = (now_utc - task.started_at).days
 
         # Do not send if deadline is far and task just started
         if days_to_deadline > 3 and days_since_start < 2:
@@ -100,7 +118,7 @@ class AgentOutreachService:
 
         if last_outreach:
             hours_since_alert = (now_utc - last_outreach.sent_at).total_seconds() / 3600
-            if hours_since_alert < 24:
+            if hours_since_alert < 4:
                 return False
 
         # Get last activity
@@ -126,12 +144,12 @@ class AgentOutreachService:
 
         hours_stale = (now_utc - last_activity).total_seconds() / 3600
 
-        # Do not send if updated within the last 2 hours (user is active)
-        if hours_stale < 2.0:
+        # Do not send if updated within the last 4 hours (user is active)
+        if hours_stale < 4.0:
             return False
 
-        # Send if stale for > 24 hours AND deadline is close (<= 3 days)
-        return hours_stale > 24.0 and days_to_deadline <= 3
+        # Send if stale for > 12 hours AND deadline is close (<= 3 days)
+        return hours_stale > 12.0 and days_to_deadline <= 3
 
     async def run_outreach_cycle(self) -> List[Dict[str, Any]]:
         """
@@ -148,6 +166,7 @@ class AgentOutreachService:
         now_utc = datetime.now(timezone.utc)
 
         import asyncio
+
         jobs = []
 
         for task in tasks:
@@ -155,7 +174,7 @@ class AgentOutreachService:
             if status_name in ["done", "completed", "todo"]:
                 continue
 
-            if not task.assignees:
+            if not task.task_members:
                 continue
 
             # Fast local compute checks
@@ -186,28 +205,32 @@ class AgentOutreachService:
                 )
 
             if should_outreach and outreach_type:
-                days_to_deadline = (task.due_date - now_utc).days if task.due_date else 0
+                days_to_deadline = (
+                    (task.due_date - now_utc).days if task.due_date else 0
+                )
                 hours_stale = (now_utc - task.updated_at).total_seconds() / 3600
 
-                for assignee in task.assignees:
-                    user_obj = assignee.user
+                for member in task.task_members:
+                    user_obj = member.user
                     if not user_obj or not user_obj.email:
                         continue
-                    
+
                     # Queue this job for parallel execution
-                    jobs.append({
-                        "task": task,
-                        "user_obj": user_obj,
-                        "days_to_deadline": days_to_deadline,
-                        "hours_stale": hours_stale,
-                        "outreach_type": outreach_type,
-                        "gaps": gaps_to_report
-                    })
+                    jobs.append(
+                        {
+                            "task": task,
+                            "user_obj": user_obj,
+                            "days_to_deadline": days_to_deadline,
+                            "hours_stale": hours_stale,
+                            "outreach_type": outreach_type,
+                            "gaps": gaps_to_report,
+                        }
+                    )
 
         if not jobs:
             return []
 
-        sem = asyncio.Semaphore(5) # Rate limit concurrency
+        sem = asyncio.Semaphore(5)  # Rate limit concurrency
 
         async def process_outreach_job(job):
             async with sem:
@@ -234,14 +257,14 @@ class AgentOutreachService:
                         body_content=email_body,
                         task_link=lnk,
                     )
-                    
+
                     return {
                         "success": True,
                         "task_id": t.id,
                         "user_id": u.id,
                         "email": u.email,
                         "outreach_type": job["outreach_type"],
-                        "email_body": email_body
+                        "email_body": email_body,
                     }
                 except Exception as ex:
                     print(f"Failed parallel outreach for task {t.id}: {ex}")
@@ -256,7 +279,7 @@ class AgentOutreachService:
                 tid = r["task_id"]
                 uid = r["user_id"]
                 otyp = r["outreach_type"]
-                
+
                 outreach_log = AgentOutreach(
                     task_id=tid,
                     user_id=uid,

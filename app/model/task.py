@@ -9,8 +9,8 @@ from app.model.base_model import BaseModel
 if TYPE_CHECKING:
     from app.model.phase import Phase
     from app.model.project import Project
-    from app.model.project_member import ProjectMember
     from app.model.tag import Tag
+    from app.model.task_member import TaskMember
     from app.model.task_priority import TaskPriority
     from app.model.task_status import TaskStatus
     from app.model.task_type import TaskType
@@ -27,24 +27,6 @@ task_tag = Table(
     ),
     Column(
         "tag_id", String(36), ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True
-    ),
-)
-
-
-task_assignee = Table(
-    "task_assignee",
-    BaseModel.metadata,
-    Column(
-        "task_id",
-        String(36),
-        ForeignKey("task.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "project_member_id",
-        String(36),
-        ForeignKey("project_member.id", ondelete="CASCADE"),
-        primary_key=True,
     ),
 )
 
@@ -72,15 +54,14 @@ class Task(BaseModel):
         String(36), ForeignKey("task_priority.id"), nullable=False
     )
 
-    assigner_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project_member.id"), nullable=False
-    )
-
     phase_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("phase.id"), nullable=True
     )
 
-    start_date: Mapped[datetime | None] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     due_date: Mapped[datetime | None] = mapped_column(
@@ -98,16 +79,10 @@ class Task(BaseModel):
     status: Mapped["TaskStatus"] = relationship("TaskStatus")
     type: Mapped["TaskType"] = relationship("TaskType")
     priority: Mapped["TaskPriority"] = relationship("TaskPriority")
-    assigner: Mapped["ProjectMember"] = relationship(
-        "ProjectMember", foreign_keys=[assigner_id]
-    )
-    assignees: Mapped[list["ProjectMember"]] = relationship(
-        "ProjectMember", secondary=task_assignee
-    )
 
-    @property
-    def assignee_ids(self) -> list[str]:
-        return [a.id for a in self.assignees]
+    task_members: Mapped[list["TaskMember"]] = relationship(
+        "TaskMember", back_populates="task", cascade="all, delete-orphan"
+    )
 
     phase: Mapped["Phase"] = relationship("Phase", back_populates="tasks")
     tags: Mapped[list["Tag"]] = relationship(
@@ -118,4 +93,4 @@ class Task(BaseModel):
     )
     sub_tasks: Mapped[list["Task"]] = relationship("Task", back_populates="parent")
 
-    eagers = ["status", "type", "priority", "assignees", "tags", "assigner"]
+    eagers = ["status", "type", "priority", "tags", "task_members"]

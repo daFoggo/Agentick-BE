@@ -6,10 +6,11 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.schema.base_schema import FindBase, ModelBaseInfo
-from app.schema.project_member_schema import ProjectMemberRead
 from app.schema.task_status_schema import TaskStatusRead
 from app.schema.task_type_schema import TaskTypeRead
 from app.schema.task_priority_schema import TaskPriorityRead
+
+from app.schema.task_member_schema import TaskMemberRead
 
 
 class TaskBase(BaseModel):
@@ -20,10 +21,10 @@ class TaskBase(BaseModel):
     status_id: str
     type_id: str
     priority_id: str
-    assigner_id: str
-    assignee_ids: Optional[List[str]] = None
+    member_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
-    start_date: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     due_date: datetime
     order: float = Field(..., ge=0)
     estimated_hours: Optional[float] = None
@@ -40,10 +41,9 @@ class TaskCreate(BaseModel):
     status_id: str
     type_id: str
     priority_id: str
-    assigner_id: str
-    assignee_ids: Optional[List[str]] = None
+    member_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
-    start_date: datetime
+    started_at: Optional[datetime] = None
     due_date: datetime
     order: Optional[float] = Field(None, ge=0)
     estimated_hours: Optional[float] = None
@@ -55,10 +55,10 @@ class TaskUpdate(BaseModel):
     status_id: Optional[str] = None
     type_id: Optional[str] = None
     priority_id: Optional[str] = None
-    assigner_id: Optional[str] = None
-    assignee_ids: Optional[List[str]] = None
+    member_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
-    start_date: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
     order: Optional[float] = Field(None, ge=0)
     is_archived: Optional[bool] = None
@@ -74,21 +74,20 @@ class TaskRead(ModelBaseInfo):
     status_id: str
     type_id: str
     priority_id: str
-    assigner_id: str
-    assignee_ids: Optional[List[str]] = None
+    member_ids: Optional[List[str]] = None
     phase_id: Optional[str] = None
-    start_date: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
     order: float
     estimated_hours: Optional[float] = None
     actual_hours: float
     is_archived: bool
     is_deleted: bool
-    assignees: Optional[List[ProjectMemberRead]] = []
+    task_members: Optional[List[TaskMemberRead]] = []
     status: Optional[TaskStatusRead] = None
     type: Optional[TaskTypeRead] = None
     priority: Optional[TaskPriorityRead] = None
-    assigner: Optional[ProjectMemberRead] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -99,12 +98,12 @@ class TaskFind(FindBase):
     team_id__eq: Optional[str] = None
     title__ilike: Optional[str] = None
     status_id__eq: Optional[str] = None
-    # Filter by any of the assignees containing this ID
-    assignee_ids__contains: Optional[str] = None
+    # Filter by any of the members containing this ID
+    member_ids__contains: Optional[str] = None
     is_archived__eq: Optional[bool] = None
     is_deleted__eq: Optional[bool] = False
     # Dashboard Overview: filter tasks assigned to a specific user (by user.id)
-    assignee_user_id__eq: Optional[str] = None
+    member_user_id__eq: Optional[str] = None
 
 
 # ── Dashboard: Task Stats ─────────────────────────────────────────────────────

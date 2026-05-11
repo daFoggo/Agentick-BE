@@ -130,6 +130,8 @@ async def generate_test_data(
         data=data,
         message="Realistic enterprise project test dataset generated successfully!",
     )
+
+
 @router.post("/morning-scan/trigger", response_model=ResponseSchema)
 async def trigger_morning_scan_manually(
     background_tasks: BackgroundTasks,
@@ -149,7 +151,7 @@ async def trigger_morning_scan_manually(
     background_tasks.add_task(run_scan)
     return ResponseSchema(
         data={"status": "queued"},
-        message="Forced morning risk scan queued successfully."
+        message="Forced morning risk scan queued successfully.",
     )
 
 
@@ -173,5 +175,5 @@ async def trigger_evening_summary_manually(
     background_tasks.add_task(run_summary)
     return ResponseSchema(
         data={"status": "queued"},
-        message="Forced evening summary report generation queued successfully."
+        message="Forced evening summary report generation queued successfully.",
     )

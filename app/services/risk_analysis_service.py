@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.agents.custom_agent import CustomAgent
 from app.core.config import configs
-from app.model.project_member import ProjectMember
 from app.model.risk_snapshot import RiskSnapshot
 from app.model.task import Task
 from app.model.task_checkpoint import TaskCheckpoint
@@ -60,10 +59,19 @@ class RiskAnalysisService(BaseService):
             signals["blocked_reason"] = None
 
         # 3. Schedule Factor (Working Hours Availability)
-        assignees = task.assignees
-        if assignees and task.due_date:
-            primary_assignee = assignees[0]
-            user_id = primary_assignee.user_id
+        # New logic: Check if started_at is missing and deadline is tight
+        signals["has_silent_risk"] = False
+        if not task.started_at and task.due_date:
+            days_left = (task.due_date - now_utc).total_seconds() / 86400
+            if days_left <= 2:
+                signals["has_silent_risk"] = True
+                signals["silent_risk_penalty"] = 0.3  # Explicit signal for LLM/Fallback
+
+        members = task.task_members
+        if members and task.due_date:
+            # Pick the first member (or preferably the lead) for scheduling calc
+            target_member = next((m for m in members if m.role == "lead"), members[0])
+            user_id = target_member.user_id
 
             # Fetch work schedules
             schedules = self.db.scalars(
@@ -111,34 +119,40 @@ class RiskAnalysisService(BaseService):
             signals["remaining_needed_hours"] = max(0.0, estimated - actual)
             signals["has_schedule_bottleneck"] = False
 
-        # 4. Congestion Factor (Parallel active tasks of assignee)
-        if assignees:
-            user_id = assignees[0].user_id
-            # Subquery project members of this user
-            member_ids = self.db.scalars(
-                select(ProjectMember.id).where(ProjectMember.user_id == user_id)
-            ).all()
+        # 4. Congestion Factor (Parallel active tasks of primary member)
+        if members:
+            target_member = next((m for m in members if m.role == "lead"), members[0])
+            user_id = target_member.user_id
 
-            # Count parallel active (not Done / Completed) tasks
+            from app.model.task_member import TaskMember
+            from app.model.task_status import TaskStatus
+
+            # Count parallel active tasks
             parallel_tasks_count = self.db.scalar(
                 select(func.count(Task.id))
-                .join(Task.assignees)
-                .where(ProjectMember.id.in_(member_ids))
+                .join(TaskMember, TaskMember.task_id == Task.id)
+                .join(TaskStatus, TaskStatus.id == Task.status_id)
+                .where(TaskMember.user_id == user_id)
                 .where(Task.is_archived.is_(False))
                 .where(Task.is_deleted.is_(False))
+                .where(TaskStatus.is_completed.is_(False))
             )
             signals["parallel_tasks_count"] = parallel_tasks_count or 0
         else:
             signals["parallel_tasks_count"] = 0
 
         # 5. Feedback Loop Calibration (Error history)
-        if assignees:
-            user_id = assignees[0].user_id
+        if members:
+            target_member = next((m for m in members if m.role == "lead"), members[0])
+            user_id = target_member.user_id
+
+            from app.model.task_member import TaskMember
+
             completed_snapshots = self.db.scalars(
                 select(RiskSnapshot)
                 .join(Task, Task.id == RiskSnapshot.task_id)
-                .join(Task.assignees)
-                .where(ProjectMember.user_id == user_id)
+                .join(TaskMember, TaskMember.task_id == Task.id)
+                .where(TaskMember.user_id == user_id)
                 .where(RiskSnapshot.prediction_error_hours.is_not(None))
             ).all()
 
@@ -269,6 +283,7 @@ Requirements:
         if not analysis_result:
             has_bottleneck = signals.get("has_schedule_bottleneck", False)
             is_blocked = signals.get("is_blocked", False)
+            has_silent_risk = signals.get("has_silent_risk", False)
 
             if is_blocked:
                 risk_score = 0.95
@@ -278,6 +293,10 @@ Requirements:
                 risk_score = 0.80
                 risk_level = "high"
                 recommendation = "A potential scheduling bottleneck has been detected. Consider reallocating available resources to ensure the task stays on track."
+            elif has_silent_risk:
+                risk_score = 0.75
+                risk_level = "high"
+                recommendation = "Task approaching deadline but has not been started. Immediate engagement recommended."
             else:
                 risk_score = 0.40
                 risk_level = "medium"
@@ -308,12 +327,22 @@ Requirements:
         risk_level = analysis_result.get("risk_level", "low")
         recommendation = analysis_result.get("recommendation", "")
 
+        # Inject Silent Risk Penalty into raw aggregate score if needed
+        if signals.get("has_silent_risk", False):
+            risk_score = min(1.0, risk_score + 0.3)
+            if risk_score > 0.8:
+                risk_level = "critical"
+            elif risk_score > 0.6:
+                risk_level = "high"
+
         # Save snapshot
         snapshot = RiskSnapshot(
             task_id=task.id,
             risk_score=risk_score,
             risk_level=risk_level,
-            alert_type="high_risk" if risk_score >= 0.7 else None,
+            alert_type="not_started_near_deadline"
+            if signals.get("has_silent_risk")
+            else ("high_risk" if risk_score >= 0.7 else None),
             signals=signals,
             recommendation=recommendation,
             predicted_completion_at=None,
@@ -324,9 +353,9 @@ Requirements:
 
         # Trigger proactive email alert if score >= 0.7
         if risk_score >= 0.7 and not snapshot.alert_sent:
-            # Send alert to assignee(s)
-            for pm in task.assignees:
-                if pm.user and pm.user.email:
+            # Send alert to involved members
+            for m in task.task_members:
+                if m.user and m.user.email:
                     try:
                         due_str = (
                             task.due_date.strftime("%Y-%m-%d %H:%M")
@@ -335,7 +364,7 @@ Requirements:
                         )
                         task_link = f"{configs.FRONTEND_URL}/tasks/{task.id}"
                         send_risk_alert_email(
-                            email_to=pm.user.email,
+                            email_to=m.user.email,
                             task_title=task.title,
                             risk_score=risk_score,
                             risk_level=risk_level,
@@ -346,28 +375,7 @@ Requirements:
                         snapshot.alert_sent = True
                         snapshot.alert_sent_at = datetime.now(timezone.utc)
                     except Exception as e:
-                        print(f"Error sending email to {pm.user.email}: {e}")
-
-            # Also send to the assigner
-            if task.assigner and task.assigner.user and task.assigner.user.email:
-                try:
-                    due_str = (
-                        task.due_date.strftime("%Y-%m-%d %H:%M")
-                        if task.due_date
-                        else "No deadline"
-                    )
-                    task_link = f"{configs.FRONTEND_URL}/tasks/{task.id}"
-                    send_risk_alert_email(
-                        email_to=task.assigner.user.email,
-                        task_title=task.title,
-                        risk_score=risk_score,
-                        risk_level=risk_level,
-                        due_date=due_str,
-                        recommendation=recommendation,
-                        task_link=task_link,
-                    )
-                except Exception as e:
-                    print(f"Error sending email to assigner: {e}")
+                        print(f"Error sending email to {m.user.email}: {e}")
 
             # Commit the update for alert_sent status
             self.db.commit()

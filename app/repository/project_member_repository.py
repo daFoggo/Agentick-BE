@@ -67,7 +67,7 @@ class ProjectMemberRepository(BaseRepository):
         with self.session_factory() as session:
             from sqlalchemy import func, distinct, cast, Date as SADate
             from sqlalchemy.orm import joinedload
-            from app.model.task import Task, task_assignee
+            from app.model.task import Task
             from app.model.task_status import TaskStatus
 
             # 1. Fetch project members with users preloaded
@@ -81,6 +81,8 @@ class ProjectMemberRepository(BaseRepository):
             member_data = []
 
             # 2. For each member, execute the workload query
+            from app.model.task_member import TaskMember
+
             for member in members:
                 local_day_expr = cast(
                     func.timezone("Asia/Ho_Chi_Minh", Task.updated_at), SADate
@@ -91,11 +93,11 @@ class ProjectMemberRepository(BaseRepository):
                         local_day_expr,
                         func.count(distinct(Task.id)).label("task_count"),
                     )
-                    .join(task_assignee, task_assignee.c.task_id == Task.id)
+                    .join(TaskMember, TaskMember.task_id == Task.id)
                     .join(TaskStatus, Task.status_id == TaskStatus.id)
                     .filter(
                         Task.project_id == project_id,
-                        task_assignee.c.project_member_id == member.id,
+                        TaskMember.user_id == member.user_id,
                         Task.is_deleted.is_(False),
                         Task.is_archived.is_(False),
                         (

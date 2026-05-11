@@ -19,6 +19,11 @@ class TaskCheckpoint(BaseModel):
         String(36), ForeignKey("user.id"), nullable=False
     )
 
+    # 'progress' | 'started' | 'completed' | 'manual_end'
+    checkpoint_type: Mapped[str] = mapped_column(
+        String(30), default="progress", nullable=False
+    )
+
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     blocked_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
