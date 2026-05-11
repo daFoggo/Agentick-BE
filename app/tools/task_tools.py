@@ -45,26 +45,22 @@ class TaskTools:
                                 "type": "string",
                                 "description": "The exact UUID of the task type (e.g., Feature, Bug, Task). Must be retrieved from context or project catalogs.",
                             },
-                            "assigner_id": {
-                                "type": "string",
-                                "description": "The exact UUID of the project member who is creating/assigning this task.",
-                            },
-                            "assignee_ids": {
+                            "member_ids": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "A list of exact UUID strings representing the project members assigned to do this task.",
+                                "description": "A list of exact user UUID strings representing the members assigned to this task.",
                             },
-                            "start_date": {
+                            "started_at": {
                                 "type": "string",
-                                "description": "The task start date/time in ISO-8601 format (e.g., '2026-05-07T10:00:00+07:00').",
+                                "description": "Optional ISO-8601 timestamp for when processing explicitly began.",
                             },
                             "due_date": {
                                 "type": "string",
-                                "description": "The task deadline/due date in ISO-8601 format (e.g., '2026-05-10T18:00:00+07:00'). Must be after or equal to the start_date.",
+                                "description": "The task deadline/due date in ISO-8601 format.",
                             },
                             "estimated_hours": {
                                 "type": "number",
-                                "description": "The estimated number of hours required to complete this task (for baseline risk assessment).",
+                                "description": "The estimated number of hours required to complete this task.",
                             },
                         },
                         "required": [
@@ -73,8 +69,6 @@ class TaskTools:
                             "status_id",
                             "priority_id",
                             "type_id",
-                            "assigner_id",
-                            "start_date",
                             "due_date",
                         ],
                     },

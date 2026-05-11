@@ -39,10 +39,10 @@ class TaskCalendarSyncService(BaseService):
         # 2. Clear existing events for this task
         self._calendar_service.delete_task_event(task.id)
 
-        # 3. If no assignees, no dates, or task is inactive, we are done
+        # 3. If no task members, no dates, or task is inactive, we are done
         if (
-            not task.assignees
-            or (not task.start_date and not task.due_date)
+            not task.task_members
+            or (not task.started_at and not task.due_date)
             or getattr(task, "is_deleted", False)
             or getattr(task, "is_archived", False)
         ):
@@ -54,14 +54,14 @@ class TaskCalendarSyncService(BaseService):
             return
 
         # 5. Determine event times
-        start_time = task.start_date or task.due_date
-        end_time = task.due_date or task.start_date
+        start_time = task.started_at or task.due_date
+        end_time = task.due_date or task.started_at
 
         if not start_time or not end_time:
             return
 
-        # 6. Create event for each assignee
-        for member in task.assignees:
+        # 6. Create event for each task member
+        for member in task.task_members:
             user_id = getattr(member, "user_id", None)
             if not user_id:
                 continue
@@ -70,11 +70,7 @@ class TaskCalendarSyncService(BaseService):
             user_name = "User"
             if member.user:
                 user_name = member.user.name
-            else:
-                # Eager load user if missing
-                member = self._project_member_repo.read_by_id(member.id, eager=True)
-                if member and member.user:
-                    user_name = member.user.name
+            # Fallback lookup if needed via DB could be added but generally loaded
 
             # Get/Create personal calendar
             self._calendar_service.get_or_create_personal_calendar(user_id, user_name)

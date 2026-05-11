@@ -44,18 +44,18 @@ Never manually define these fields on individual models.
 
 Many-to-many relationships must be handled through explicit association tables containing dual primary keys. Do not store arrays or comma-separated lists of IDs inside a single column.
 
-Standard association tables used:
+Standard association tables/objects used:
 1. **`task_tag`**: Maps `Task` ↔ `Tag`.
-2. **`task_assignee`**: Maps `Task` ↔ `ProjectMember`.
+2. **`task_member`**: Model mapped to `task_member` table storing relation `Task` ↔ `User` with extra role context (`lead`/`member`).
 3. **`event_participant`**: Maps `Event` ↔ `TeamMember`.
 
-Example definition:
+For standard M2M without extra attributes, use `Table`:
 ```python
-task_assignee = Table(
-    "task_assignee",
+task_tag = Table(
+    "task_tag",
     BaseModel.metadata,
     Column("task_id", String(36), ForeignKey("task.id", ondelete="CASCADE"), primary_key=True),
-    Column("project_member_id", String(36), ForeignKey("project_member.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", String(36), ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),
 )
 ```
 

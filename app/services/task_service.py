@@ -7,11 +7,11 @@ class TaskService(BaseService):
         super().__init__(repository)
         self.project_member_repo = project_member_repo
 
-    def add(self, schema: Any) -> Any:
-        result = super().add(schema)
-        if hasattr(schema, "assignee_ids") and schema.assignee_ids:
+    def add(self, schema: Any, acting_user_id: str = None) -> Any:
+        result = self._repository.create(schema, acting_user_id=acting_user_id)
+        if hasattr(schema, "member_ids") and schema.member_ids:
             self._repository.create_task_assignment_notifications(
-                result.id, schema.assignee_ids
+                result.id, schema.member_ids
             )
         return self.get_by_id(result.id)
 
@@ -26,15 +26,15 @@ class TaskService(BaseService):
         return self._repository.read_by_id(id, eager=True)
 
     def patch(self, id: str, schema: Any, user_id: str = None) -> Any:
-        old_assignee_ids = set()
-        if hasattr(schema, "assignee_ids") and schema.assignee_ids is not None:
-            old_assignee_ids = self._repository.get_task_assignee_ids(id)
+        old_member_ids = set()
+        if hasattr(schema, "member_ids") and schema.member_ids is not None:
+            old_member_ids = self._repository.get_task_member_ids(id)
 
         result = self._repository.update(id, schema, eager=True, user_id=user_id)
 
-        if hasattr(schema, "assignee_ids") and schema.assignee_ids is not None:
-            new_assignee_ids = set(schema.assignee_ids)
-            added_ids = new_assignee_ids - old_assignee_ids
+        if hasattr(schema, "member_ids") and schema.member_ids is not None:
+            new_member_ids = set(schema.member_ids)
+            added_ids = new_member_ids - old_member_ids
             if added_ids:
                 self._repository.create_task_assignment_notifications(
                     result.id, list(added_ids)
@@ -133,11 +133,11 @@ class TaskService(BaseService):
             assignee_name = "Unassigned"
             try:
                 if (
-                    task.assignees
-                    and len(task.assignees) > 0
-                    and task.assignees[0].user
+                    task.task_members
+                    and len(task.task_members) > 0
+                    and task.task_members[0].user
                 ):
-                    assignee_name = task.assignees[0].user.name
+                    assignee_name = task.task_members[0].user.name
             except Exception:
                 pass
 
@@ -185,7 +185,7 @@ class TaskService(BaseService):
                     else "Unknown Task",
                     "user_id": activity.user_id,
                     "user_name": activity.user.name if activity.user else "System",
-                    "field_changed": activity.field_changed,
+                    "field_changed": activity.field_name,
                     "old_value": activity.old_value,
                     "new_value": activity.new_value,
                     "old_status_name": old_status.get("name"),
@@ -198,3 +198,85 @@ class TaskService(BaseService):
                 }
             )
         return results
+
+    def start_task(self, id: str, user_id: str) -> Any:
+        from datetime import datetime, timezone
+        from app.model.task_checkpoint import TaskCheckpoint
+        from app.model.task_activity import TaskActivity
+
+        with self._repository.session_factory() as session:
+            task = session.query(self._repository.model).filter_by(id=id).first()
+            if not task:
+                return None
+
+            now = datetime.now(timezone.utc)
+
+            # 1. Update task tracking
+            task.started_at = now
+
+            # 2. Insert Milestone Activity
+            activity = TaskActivity(
+                task_id=id,
+                user_id=user_id,
+                activity_type="started",
+                content="Task successfully started!",
+            )
+            session.add(activity)
+
+            # 3. Insert Progress Checkpoint
+            checkpoint = TaskCheckpoint(
+                task_id=id,
+                reported_by=user_id,
+                checkpoint_type="started",
+                progress_pct=0,
+            )
+            session.add(checkpoint)
+
+            session.commit()
+            return self.get_by_id(id)
+
+    def complete_task(self, id: str, user_id: str, completed_at: Any = None) -> Any:
+        from datetime import datetime, timezone
+        from app.model.task_checkpoint import TaskCheckpoint
+        from app.model.task_activity import TaskActivity
+
+        with self._repository.session_factory() as session:
+            task = session.query(self._repository.model).filter_by(id=id).first()
+            if not task:
+                return None
+
+            effective_done_at = (
+                completed_at if completed_at else datetime.now(timezone.utc)
+            )
+            checkpoint_kind = "manual_end" if completed_at else "completed"
+
+            # 1. Update Task status and actual finish
+            task.completed_at = effective_done_at
+            # Find the completed status ID dynamically from your table schema, or leave for endpoint layer to provide
+
+            # 2. Activity
+            activity = TaskActivity(
+                task_id=id,
+                user_id=user_id,
+                activity_type=checkpoint_kind,
+                content="Task marked as completed!",
+            )
+            session.add(activity)
+
+            # 3. Insert Final Checkpoint
+            checkpoint = TaskCheckpoint(
+                task_id=id,
+                reported_by=user_id,
+                checkpoint_type=checkpoint_kind,
+                progress_pct=100,
+            )
+            session.add(checkpoint)
+
+            session.commit()
+            return self.get_by_id(id)
+
+    def get_task_activities(self, task_id: str):
+        return self._repository.get_task_activities_raw(task_id)
+
+    def create_comment(self, task_id: str, user_id: str, content: str):
+        return self._repository.create_comment_activity(task_id, user_id, content)

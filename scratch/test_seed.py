@@ -9,6 +9,7 @@ from app.model.task_type import TaskType
 from app.model.work_schedule import WorkSchedule
 from app.model.task import Task
 from app.model.task_checkpoint import TaskCheckpoint
+from app.model.task_member import TaskMember
 from datetime import datetime, timedelta
 import pytz
 from app.core.security import get_password_hash
@@ -221,13 +222,14 @@ with get_database().session() as db:
         status_id=statuses["In Progress"].id,
         type_id=types["Task"].id,
         priority_id=priorities["High"].id,
-        assigner_id=lead_member.id,
         estimated_hours=20.0,
         actual_hours=28.0,
         due_date=now + timedelta(days=1),
     )
-    task_payment.assignees = [dev_member]
     db.add(task_payment)
+    db.flush()
+    db.add(TaskMember(task_id=task_payment.id, user_id=user.id, role="lead"))
+    db.add(TaskMember(task_id=task_payment.id, user_id=mock_dev.id, role="member"))
 
     task_k8s = Task(
         project_id=project.id,
@@ -236,13 +238,14 @@ with get_database().session() as db:
         status_id=statuses["Blocked"].id,
         type_id=types["Task"].id,
         priority_id=priorities["Critical"].id,
-        assigner_id=lead_member.id,
         estimated_hours=16.0,
         actual_hours=4.0,
         due_date=now + timedelta(days=2),
     )
-    task_k8s.assignees = [dev_member]
     db.add(task_k8s)
+    db.flush()
+    db.add(TaskMember(task_id=task_k8s.id, user_id=user.id, role="lead"))
+    db.add(TaskMember(task_id=task_k8s.id, user_id=mock_dev.id, role="member"))
     db.flush()
 
     # 10. Checkpoints with reported_by

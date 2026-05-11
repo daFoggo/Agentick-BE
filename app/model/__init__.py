@@ -11,6 +11,7 @@ from app.model.agent_outreach import AgentOutreach
 from app.model.tag import Tag
 from app.model.task import Task
 from app.model.task_checkpoint import TaskCheckpoint
+from app.model.task_member import TaskMember
 from app.model.task_priority import TaskPriority
 from app.model.task_status import TaskStatus
 from app.model.task_time_log import TaskTimeLog
@@ -32,6 +33,7 @@ __all__ = [
     "TaskType",
     "TaskPriority",
     "Task",
+    "TaskMember",
     "TaskTimeLog",
     "TaskCheckpoint",
     "RiskSnapshot",
