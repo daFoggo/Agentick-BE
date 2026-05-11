@@ -30,9 +30,8 @@ erDiagram
     TASK }o--|| TASK_STATUS : "trạng thái"
     TASK }o--|| TASK_TYPE : "loại"
     TASK }o--|| TASK_PRIORITY : "ưu tiên"
-    TASK }o--|| PROJECT_MEMBER : "người giao"
-    TASK ||--o{ TASK_ASSIGNEE : "giao cho"
-    TASK_ASSIGNEE }o--|| PROJECT_MEMBER : "thực thi"
+    TASK ||--o{ TASK_MEMBER : "có thành viên"
+    TASK_MEMBER }o--|| USER : "là người dùng"
     TASK ||--o{ TASK : "subtask (parent_id)"
 ```
 
@@ -116,17 +115,26 @@ Lưu trữ công việc chi tiết.
 | `status_id` | `VARCHAR(36)` | FK (`task_status.id`), NOT NULL |
 | `type_id` | `VARCHAR(36)` | FK (`task_type.id`), NOT NULL |
 | `priority_id` | `VARCHAR(36)` | FK (`task_priority.id`), NOT NULL |
-| `assigner_id` | `VARCHAR(36)` | FK (`project_member.id`), NOT NULL |
 | `phase_id` | `VARCHAR(36)` | FK (`phase.id`), NULLABLE |
-| `start_date` | `TIMESTAMPTZ` | NULLABLE |
-| `due_date` | `TIMESTAMPTZ` | NULLABLE |
+| `started_at` | `TIMESTAMPTZ` | NULLABLE (Ngày bắt đầu thực tế) |
+| `completed_at`| `TIMESTAMPTZ`| NULLABLE (Ngày hoàn tất thực tế) |
+| `due_date` | `TIMESTAMPTZ` | NULLABLE (Hạn cuối) |
 | `order` | `FLOAT` | Thứ tự hiển thị trên Board |
 | `estimated_hours`| `FLOAT` | NULLABLE |
 | `actual_hours` | `FLOAT` | DEFAULT 0.0 |
 | `is_archived` | `BOOLEAN` | DEFAULT FALSE |
 | `is_deleted` | `BOOLEAN` | DEFAULT FALSE |
 
-### 5.2.7. Cấu hình Metadata Project (Cài đặt riêng)
+### 5.2.7. Bảng: `task_member`
+Quản lý những người tham gia thực hiện hoặc dẫn dắt (lead) một công việc cụ thể. Trỏ trực tiếp vào `user` chứ không qua `project_member`.
+| Tên Cột | Kiểu dữ liệu | Thuộc tính / Mô tả |
+| --- | --- | --- |
+| `task_id` | `VARCHAR(36)` | FK (`task.id`), ON DELETE CASCADE, NOT NULL |
+| `user_id` | `VARCHAR(36)` | FK (`user.id`), NOT NULL |
+| `role` | `VARCHAR(20)` | Enum string: 'lead', 'member' |
+| `joined_at` | `TIMESTAMPTZ` | Thời điểm được add vào task |
+
+### 5.2.8. Cấu hình Metadata Project (Cài đặt riêng)
 Bao gồm các bảng định nghĩa bộ giá trị tùy biến cho từng dự án.
 
 **Bảng: `task_status`**
@@ -273,6 +281,5 @@ Lưu nhật ký AI chủ động gửi email rà soát.
 ---
 
 ## 5.5. Bảng Liên kết N-N (Association Tables)
-1. **`task_assignee`**: Gồm (`task_id`, `project_member_id`) => Chỉ định 1 hoặc nhiều người thực hiện 1 task.
-2. **`task_tag`**: Gồm (`task_id`, `tag_id`) => Gắn nhiều nhãn chéo cho công việc.
-3. **`event_participant`**: Gồm (`event_id`, `team_member_id`) => Quản lý danh sách người tham gia họp/sự kiện.
+1. **`task_tag`**: Gồm (`task_id`, `tag_id`) => Gắn nhiều nhãn chéo cho công việc.
+2. **`event_participant`**: Gồm (`event_id`, `team_member_id`) => Quản lý danh sách người tham gia họp/sự kiện.

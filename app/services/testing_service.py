@@ -16,6 +16,7 @@ from app.model.team import Team
 from app.model.team_member import TeamMember
 from app.model.user import User
 from app.model.work_schedule import WorkSchedule
+from app.model.task_member import TaskMember
 
 
 class TestingService:
@@ -238,7 +239,15 @@ class TestingService:
         db.flush()
 
         # 9. Tasks
+        # Normalize times to clean day start / day end to avoid weird Gantt offsets (e.g., 10:27 PM)
         now = datetime.now(pytimezone.utc)
+        base_start = now.replace(
+            hour=9, minute=0, second=0, microsecond=0
+        )  # 9 AM standard start
+        base_eod = now.replace(
+            hour=23, minute=59, second=0, microsecond=0
+        )  # EOD standard deadline
+
         task_payment = Task(
             project_id=project.id,
             title="Implement Stripe Payment Gateway Integration",
@@ -246,13 +255,15 @@ class TestingService:
             status_id=statuses["In Progress"].id,
             type_id=types["Task"].id,
             priority_id=priorities["High"].id,
-            assigner_id=lead_member.id,
             estimated_hours=20.0,
             actual_hours=28.0,
-            due_date=now + timedelta(days=1),
+            started_at=base_start - timedelta(days=1),
+            due_date=base_eod + timedelta(days=1),
         )
-        task_payment.assignees = [dev_member]
         db.add(task_payment)
+        db.flush()
+        db.add(TaskMember(task_id=task_payment.id, user_id=target_user.id, role="lead"))
+        db.add(TaskMember(task_id=task_payment.id, user_id=mock_dev.id, role="member"))
 
         task_k8s = Task(
             project_id=project.id,
@@ -261,13 +272,15 @@ class TestingService:
             status_id=statuses["Blocked"].id,
             type_id=types["Task"].id,
             priority_id=priorities["Critical"].id,
-            assigner_id=lead_member.id,
             estimated_hours=16.0,
             actual_hours=4.0,
-            due_date=now + timedelta(days=2),
+            started_at=base_start - timedelta(days=2),
+            due_date=base_eod + timedelta(days=2),
         )
-        task_k8s.assignees = [dev_member]
         db.add(task_k8s)
+        db.flush()
+        db.add(TaskMember(task_id=task_k8s.id, user_id=target_user.id, role="lead"))
+        db.add(TaskMember(task_id=task_k8s.id, user_id=mock_dev.id, role="member"))
 
         task_db = Task(
             project_id=project.id,
@@ -275,13 +288,15 @@ class TestingService:
             status_id=statuses["In Progress"].id,
             type_id=types["Task"].id,
             priority_id=priorities["Medium"].id,
-            assigner_id=lead_member.id,
             estimated_hours=8.0,
             actual_hours=2.0,
-            due_date=now + timedelta(days=3),
+            started_at=base_start - timedelta(hours=12),
+            due_date=base_eod + timedelta(days=3),
         )
-        task_db.assignees = [dev_member]
         db.add(task_db)
+        db.flush()
+        db.add(TaskMember(task_id=task_db.id, user_id=target_user.id, role="lead"))
+        db.add(TaskMember(task_id=task_db.id, user_id=mock_dev.id, role="member"))
 
         task_auth = Task(
             project_id=project.id,
@@ -289,13 +304,15 @@ class TestingService:
             status_id=statuses["In Progress"].id,
             type_id=types["Task"].id,
             priority_id=priorities["High"].id,
-            assigner_id=lead_member.id,
             estimated_hours=12.0,
             actual_hours=1.0,
-            due_date=now + timedelta(days=4),
+            started_at=base_start - timedelta(hours=6),
+            due_date=base_eod + timedelta(days=4),
         )
-        task_auth.assignees = [dev_member]
         db.add(task_auth)
+        db.flush()
+        db.add(TaskMember(task_id=task_auth.id, user_id=target_user.id, role="lead"))
+        db.add(TaskMember(task_id=task_auth.id, user_id=mock_dev.id, role="member"))
 
         task_missing_est = Task(
             project_id=project.id,
@@ -303,13 +320,19 @@ class TestingService:
             status_id=statuses["In Progress"].id,
             type_id=types["Task"].id,
             priority_id=priorities["High"].id,
-            assigner_id=lead_member.id,
             estimated_hours=None,
             actual_hours=0.0,
-            due_date=now + timedelta(days=2),
+            started_at=base_start - timedelta(hours=1),
+            due_date=base_eod + timedelta(days=2),
         )
-        task_missing_est.assignees = [dev_member]
         db.add(task_missing_est)
+        db.flush()
+        db.add(
+            TaskMember(task_id=task_missing_est.id, user_id=target_user.id, role="lead")
+        )
+        db.add(
+            TaskMember(task_id=task_missing_est.id, user_id=mock_dev.id, role="member")
+        )
 
         task_stale_chk = Task(
             project_id=project.id,
@@ -317,15 +340,45 @@ class TestingService:
             status_id=statuses["In Progress"].id,
             type_id=types["Task"].id,
             priority_id=priorities["Medium"].id,
-            assigner_id=lead_member.id,
             estimated_hours=8.0,
             actual_hours=1.0,
-            start_date=now - timedelta(days=2),
-            due_date=now + timedelta(days=2),
+            started_at=base_start - timedelta(days=2),
+            due_date=base_eod + timedelta(days=2),
             updated_at=now - timedelta(hours=26),
         )
-        task_stale_chk.assignees = [dev_member]
         db.add(task_stale_chk)
+        db.flush()
+        db.add(
+            TaskMember(task_id=task_stale_chk.id, user_id=target_user.id, role="lead")
+        )
+        db.add(
+            TaskMember(task_id=task_stale_chk.id, user_id=mock_dev.id, role="member")
+        )
+        db.flush()
+
+        # 🆕 EXPLICIT TEST CASE: Silent Risk (No started_at, deadline < 2 days)
+        task_silent_risk = Task(
+            project_id=project.id,
+            title="[Test Scenario] CRITICAL: Database Replica Configuration",
+            description="Task must trigger Silent Risk penalty (+0.3) because it has NOT started yet.",
+            status_id=statuses[
+                "In Progress"
+            ].id,  # User technically moved it here but didn't press START
+            type_id=types["Task"].id,
+            priority_id=priorities["Critical"].id,
+            estimated_hours=10.0,
+            actual_hours=0.0,
+            started_at=None,  # 🚨 CRITICAL TRIGGER for new logic
+            due_date=base_eod + timedelta(hours=30),  # Near future EOD-ish
+        )
+        db.add(task_silent_risk)
+        db.flush()
+        db.add(
+            TaskMember(task_id=task_silent_risk.id, user_id=target_user.id, role="lead")
+        )
+        db.add(
+            TaskMember(task_id=task_silent_risk.id, user_id=mock_dev.id, role="member")
+        )
         db.flush()
 
         # 10. Checkpoints
@@ -381,6 +434,7 @@ class TestingService:
                 {"id": task_auth.id, "title": task_auth.title},
                 {"id": task_missing_est.id, "title": task_missing_est.title},
                 {"id": task_stale_chk.id, "title": task_stale_chk.title},
+                {"id": task_silent_risk.id, "title": task_silent_risk.title},
             ],
         }
 
@@ -399,6 +453,8 @@ class TestingService:
         from app.model.task import Task
         from app.services.risk_analysis_service import RiskAnalysisService
 
+        from app.core.dependencies import get_database
+
         tasks = db.scalars(
             select(Task)
             .options(joinedload(Task.project))
@@ -406,7 +462,7 @@ class TestingService:
             .where(Task.is_deleted.is_(False))
         ).all()
 
-        analyzer = RiskAnalysisService(db)
+        db_factory = get_database()
 
         # Enforce maximum of 5 concurrent requests to OpenRouter to avoid instant rate bans
         sem = asyncio.Semaphore(5)
@@ -417,15 +473,18 @@ class TestingService:
                 return None
 
             async with sem:
-                try:
-                    snapshot = await analyzer.analyze_task(task_obj.id)
-                    return {
-                        "task_id": task_obj.id,
-                        "task_title": task_obj.title,
-                        "risk_score": snapshot.risk_score,
-                    }
-                except Exception as ex:
-                    return {"task_id": task_obj.id, "error": str(ex)}
+                # CRITICAL FIX: Use completely isolated DB Session for concurrent async execution
+                with db_factory.session() as local_db:
+                    try:
+                        local_analyzer = RiskAnalysisService(local_db)
+                        snapshot = await local_analyzer.analyze_task(task_obj.id)
+                        return {
+                            "task_id": task_obj.id,
+                            "task_title": task_obj.title,
+                            "risk_score": snapshot.risk_score,
+                        }
+                    except Exception as ex:
+                        return {"task_id": task_obj.id, "error": str(ex)}
 
         # Trigger dynamic parallel pipeline
         raw_results = await asyncio.gather(*[process_single_task(t) for t in tasks])

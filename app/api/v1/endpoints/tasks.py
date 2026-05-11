@@ -93,7 +93,9 @@ def complete_task(
     return ResponseSchema(data=result, message="Task successfully finalized")
 
 
-@router.get("/{task_id}/activities", response_model=ResponseSchema[list[TaskActivityRead]])
+@router.get(
+    "/{task_id}/activities", response_model=ResponseSchema[list[TaskActivityRead]]
+)
 def get_task_activities(
     task_id: str,
     current_user: User = Depends(get_current_active_user),

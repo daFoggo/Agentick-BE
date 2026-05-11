@@ -12,20 +12,22 @@ class TaskRepository(BaseRepository):
     def create(self, schema, acting_user_id: str = None, auto_commit=True):
         data = schema.model_dump() if hasattr(schema, "model_dump") else schema
         member_ids = data.pop("member_ids", []) or []
-        
+
         from app.model.task_status import TaskStatus
         from datetime import datetime, timezone
-        
+
         with self.session_factory() as session:
             # Auto-stamp life-cycle times on creation if explicit non-default status is chosen
             if "status_id" in data and data["status_id"]:
-                new_status = session.query(TaskStatus).filter_by(id=data["status_id"]).first()
+                new_status = (
+                    session.query(TaskStatus).filter_by(id=data["status_id"]).first()
+                )
                 if new_status:
                     now_utc = datetime.now(timezone.utc)
                     # 1. Auto-stamp started_at if not default
                     if not data.get("started_at") and not new_status.is_default:
                         data["started_at"] = now_utc
-                    
+
                     # 2. Auto-stamp completed_at if status is completed
                     if new_status.is_completed:
                         if not data.get("completed_at"):
@@ -94,16 +96,23 @@ class TaskRepository(BaseRepository):
                     "description": "description",
                     "phase_id": "phase",
                 }
-                
+
                 for f_key, label in tracked_fields.items():
                     if f_key in data and getattr(item, f_key) != data[f_key]:
                         # Small safety to not create noise on null -> "" migrations etc.
-                        old_v = str(getattr(item, f_key)) if getattr(item, f_key) is not None else None
+                        old_v = (
+                            str(getattr(item, f_key))
+                            if getattr(item, f_key) is not None
+                            else None
+                        )
                         new_v = str(data[f_key]) if data[f_key] is not None else None
-                        if old_v == new_v: continue
-                        
-                        act_type = "status_change" if f_key == "status_id" else "field_change"
-                        
+                        if old_v == new_v:
+                            continue
+
+                        act_type = (
+                            "status_change" if f_key == "status_id" else "field_change"
+                        )
+
                         activity = TaskActivity(
                             task_id=id,
                             user_id=user_id,
@@ -531,6 +540,7 @@ class TaskRepository(BaseRepository):
     def create_comment_activity(self, task_id: str, user_id: str, content: str):
         with self.session_factory() as session:
             from app.model.task_activity import TaskActivity
+
             activity = TaskActivity(
                 task_id=task_id,
                 user_id=user_id,
@@ -540,7 +550,13 @@ class TaskRepository(BaseRepository):
             session.add(activity)
             session.commit()
             session.refresh(activity)
-            
+
             # Load relationship before returning
             from sqlalchemy.orm import joinedload
-            return session.query(TaskActivity).filter_by(id=activity.id).options(joinedload(TaskActivity.user)).first()
+
+            return (
+                session.query(TaskActivity)
+                .filter_by(id=activity.id)
+                .options(joinedload(TaskActivity.user))
+                .first()
+            )

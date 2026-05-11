@@ -6,6 +6,7 @@ from app.model.task_status import TaskStatus
 from app.model.task import Task
 from app.model.task_time_log import TaskTimeLog
 from app.model.risk_snapshot import RiskSnapshot
+from app.model.task_member import TaskMember
 from app.services.velocity_service import VelocityService
 from app.services.estimation_service import EstimationService
 from app.services.risk_analysis_service import RiskAnalysisService
@@ -85,12 +86,13 @@ async def run_tests():
             else completed_status.id,
             type_id=first_task.type_id,
             priority_id=first_task.priority_id,
-            assigner_id=first_task.assigner_id,
             estimated_hours=10.0,
             actual_hours=14.0,
             due_date=datetime.now(timezone.utc) + timedelta(days=2),
         )
         db.add(test_task)
+        db.flush()
+        db.add(TaskMember(task_id=test_task.id, user_id=user.id, role="lead"))
         db.commit()
 
         # Create a mock RiskSnapshot for this task

@@ -325,7 +325,10 @@ Requirements:
 
         risk_score = analysis_result.get("risk_score", 0.0)
         risk_level = analysis_result.get("risk_level", "low")
-        recommendation = analysis_result.get("recommendation", "")
+        recommendation = str(analysis_result.get("recommendation", "")).strip()
+
+        if not recommendation or recommendation == "":
+            recommendation = "Monitor task closely to ensure timeline consistency and provide support to the team member."
 
         # Inject Silent Risk Penalty into raw aggregate score if needed
         if signals.get("has_silent_risk", False):
