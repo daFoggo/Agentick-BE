@@ -57,6 +57,9 @@ class NotificationService:
             notification_id, "status", NotificationStatus.ARCHIVED
         )
 
+    def mark_all_as_read(self, user_id: str):
+        return self.notification_repository.mark_all_read(user_id)
+
     def archive_notification(self, notification_id: str, user_id: str):
         notification = self.notification_repository.read_by_id(notification_id)
         if notification.user_id != user_id:

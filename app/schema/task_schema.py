@@ -92,6 +92,14 @@ class TaskRead(ModelBaseInfo):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MyTasksOverview(BaseModel):
+    in_progress: List[TaskRead]
+    upcoming: List[TaskRead]
+    overdue: List[TaskRead]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TaskFind(FindBase):
     id__eq: Optional[str] = None
     project_id__eq: Optional[str] = None

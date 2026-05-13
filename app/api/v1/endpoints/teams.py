@@ -8,6 +8,7 @@ from app.model.user import User
 from app.repository.team_repository import TeamRepository
 from app.repository.team_member_repository import TeamMemberRepository
 from app.repository.project_member_repository import ProjectMemberRepository
+from app.repository.task_repository import TaskRepository
 from app.schema.base_schema import ResponseSchema, FindResult
 from app.schema.team_schema import TeamCreate, TeamRead, TeamUpdate, TeamFind
 from app.schema.team_member_schema import (
@@ -31,8 +32,11 @@ router = APIRouter(prefix="/teams", tags=["teams"])
 def get_team_service(db=Depends(get_db)) -> TeamService:
     team_repository = TeamRepository(lambda: nullcontext(db))
     team_member_repository = TeamMemberRepository(lambda: nullcontext(db))
+    task_repository = TaskRepository(lambda: nullcontext(db))
     return TeamService(
-        team_repository=team_repository, team_member_repository=team_member_repository
+        team_repository=team_repository,
+        team_member_repository=team_member_repository,
+        task_repository=task_repository,
     )
 
 

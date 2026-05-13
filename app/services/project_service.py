@@ -24,6 +24,7 @@ class ProjectService(BaseService):
         task_status_repository: TaskStatusRepository,
         task_type_repository: TaskTypeRepository,
         task_priority_repository: TaskPriorityRepository,
+        task_repository=None,
     ) -> None:
         super().__init__(repository=project_repository)
         self._team_repository = team_repository
@@ -32,6 +33,7 @@ class ProjectService(BaseService):
         self._task_status_repository = task_status_repository
         self._task_type_repository = task_type_repository
         self._task_priority_repository = task_priority_repository
+        self._task_repository = task_repository
 
     def _ensure_user_in_team(
         self, team_id: str, user_id: str, allow_roles: set[str] | None = None
@@ -246,6 +248,10 @@ class ProjectService(BaseService):
         if not member.get("founds"):
             raise AuthError(detail="You are not a member of this project.")
 
+        if self._task_repository:
+            stats = self._task_repository.get_projects_stats([project_id])
+            project.stats = stats.get(project_id)
+
         return project
 
     def update_project(
@@ -268,8 +274,14 @@ class ProjectService(BaseService):
 
         return self._repository.update_attr(project_id, "is_deleted", True)
 
-    def get_my_projects(self, user_id: str):
-        return self._repository.get_my_projects(user_id)
+    def get_my_projects(self, user_id: str, team_id: str | None = None):
+        projects = self._repository.get_my_projects(user_id, team_id=team_id)
+        if self._task_repository and projects:
+            project_ids = [p.id for p in projects]
+            stats_map = self._task_repository.get_projects_stats(project_ids)
+            for p in projects:
+                p.stats = stats_map.get(p.id)
+        return projects
 
     def get_projects(self, find_query: ProjectFind, current_user: User):
         # Always filter projects by user membership
@@ -277,6 +289,13 @@ class ProjectService(BaseService):
         projects = self._repository.get_my_projects(
             current_user.id, team_id=find_query.team_id__eq
         )
+
+        if self._task_repository and projects:
+            project_ids = [p.id for p in projects]
+            stats_map = self._task_repository.get_projects_stats(project_ids)
+            for p in projects:
+                p.stats = stats_map.get(p.id)
+
         return {
             "founds": projects,
             "search_options": {

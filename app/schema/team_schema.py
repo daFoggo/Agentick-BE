@@ -20,9 +20,16 @@ class TeamUpdate(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=512)
 
 
+class TeamStats(BaseModel):
+    total_tasks: int
+    completed_tasks: int
+    weekly_activity: list[int]
+
+
 class TeamRead(ModelBaseInfo, TeamBase):
     owner_id: str
     is_deleted: bool
+    stats: Optional[TeamStats] = None
 
     model_config = ConfigDict(from_attributes=True)
 
