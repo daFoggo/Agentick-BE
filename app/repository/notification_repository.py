@@ -22,6 +22,15 @@ class NotificationRepository(BaseRepository):
                 .count()
             )
 
+    def mark_all_read(self, user_id: str) -> bool:
+        with self.session_factory() as session:
+            session.query(Notification).filter(
+                Notification.user_id == user_id,
+                Notification.status == NotificationStatus.ACTIVE,
+            ).update({Notification.status: NotificationStatus.ARCHIVED})
+            session.commit()
+            return True
+
     def get_stats(self, user_id: str) -> dict:
         with self.session_factory() as session:
             # Active (Unread)

@@ -55,6 +55,7 @@ def get_project_service(db=Depends(get_db)) -> ProjectService:
     task_status_repository = TaskStatusRepository(lambda: nullcontext(db))
     task_type_repository = TaskTypeRepository(lambda: nullcontext(db))
     task_priority_repository = TaskPriorityRepository(lambda: nullcontext(db))
+    task_repository = TaskRepository(lambda: nullcontext(db))
     return ProjectService(
         project_repository=project_repository,
         team_repository=team_repository,
@@ -63,6 +64,7 @@ def get_project_service(db=Depends(get_db)) -> ProjectService:
         task_status_repository=task_status_repository,
         task_type_repository=task_type_repository,
         task_priority_repository=task_priority_repository,
+        task_repository=task_repository,
     )
 
 
@@ -99,10 +101,11 @@ def get_projects(
 
 @router.get("/me", response_model=ResponseSchema[List[ProjectRead]])
 def get_my_projects(
+    team_id: str | None = Query(None),
     current_user: User = Depends(get_current_active_user),
     service: ProjectService = Depends(get_project_service),
 ):
-    result = service.get_my_projects(current_user.id)
+    result = service.get_my_projects(current_user.id, team_id=team_id)
     return ResponseSchema(data=result)
 
 

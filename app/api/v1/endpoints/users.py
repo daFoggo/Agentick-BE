@@ -12,7 +12,8 @@ from app.repository.task_repository import TaskRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.auth_schema import UserInfo
 from app.schema.user_schema import UserSearch, UserSearchResult
-from app.schema.task_schema import TaskFind, TaskRead
+from datetime import datetime
+from app.schema.task_schema import TaskFind, TaskRead, MyTasksOverview
 from app.services.user_service import UserService
 from app.services.task_service import TaskService
 
@@ -90,6 +91,22 @@ def get_my_tasks(
         },
         message="My tasks fetched successfully",
     )
+
+
+@router.get("/me/tasks/overview", response_model=ResponseSchema[MyTasksOverview])
+def get_my_tasks_overview(
+    team_id: str | None = Query(None),
+    client_today: datetime | None = Query(None),
+    current_user: User = Depends(get_current_active_user),
+    service: TaskService = Depends(get_task_service),
+):
+    """Lấy dashboard overview cá nhân, chia nhóm in_progress, upcoming, overdue."""
+    result = service.get_my_tasks_overview(
+        user_id=current_user.id,
+        team_id=team_id,
+        client_today=client_today,
+    )
+    return ResponseSchema(data=result, message="My tasks overview generated successfully")
 
 
 @router.get("/me/stats", response_model=ResponseSchema[dict])

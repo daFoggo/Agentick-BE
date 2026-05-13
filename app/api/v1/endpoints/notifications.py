@@ -72,6 +72,15 @@ def mark_as_read(
     return ResponseSchema(data=notification, message="Notification marked as read")
 
 
+@router.post("/read-all", response_model=ResponseSchema[bool])
+def mark_all_as_read(
+    current_user: User = Depends(get_current_active_user),
+    service: NotificationService = Depends(get_notification_service),
+):
+    service.mark_all_as_read(current_user.id)
+    return ResponseSchema(data=True, message="All notifications marked as read")
+
+
 @router.patch(
     "/{notification_id}/archive", response_model=ResponseSchema[NotificationResponse]
 )

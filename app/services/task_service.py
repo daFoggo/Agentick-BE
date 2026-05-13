@@ -67,6 +67,16 @@ class TaskService(BaseService):
             user_id=user_id, user_member_ids=user_member_ids, team_id=team_id
         )
 
+    def get_my_tasks_overview(self, user_id: str, team_id: str | None = None, client_today=None):
+        if not self.project_member_repo:
+            return {"in_progress": [], "upcoming": [], "overdue": []}
+        user_member_ids = self.project_member_repo.get_member_ids_by_user(user_id)
+        if not user_member_ids:
+            return {"in_progress": [], "upcoming": [], "overdue": []}
+        return self._repository.get_my_tasks_overview(
+            user_id=user_id, user_member_ids=user_member_ids, team_id=team_id, client_today=client_today
+        )
+
     def get_project_stats(self, project_id: str, period: str):
         from datetime import datetime, timedelta, timezone
         from app.schema.task_schema import ProjectTaskStats, TaskStatItem
@@ -188,9 +198,9 @@ class TaskService(BaseService):
                     "field_changed": activity.field_name,
                     "old_value": activity.old_value,
                     "new_value": activity.new_value,
-                    "old_status_name": old_status.get("name"),
+                    "old_status_name": old_status.get("name") or activity.old_value,
                     "old_status_color": old_status.get("color"),
-                    "new_status_name": new_status.get("name"),
+                    "new_status_name": new_status.get("name") or activity.new_value,
                     "new_status_color": new_status.get("color"),
                     "created_at": activity.created_at.isoformat()
                     if activity.created_at

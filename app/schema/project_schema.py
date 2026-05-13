@@ -21,9 +21,16 @@ class ProjectUpdate(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=512)
 
 
+class ProjectStats(BaseModel):
+    total_tasks: int
+    completed_tasks: int
+    weekly_activity: list[int]
+
+
 class ProjectRead(ModelBaseInfo, ProjectBase):
     is_deleted: bool
     members: Optional[List[ProjectMemberRead]] = []
+    stats: Optional[ProjectStats] = None
 
     model_config = ConfigDict(from_attributes=True)
 
