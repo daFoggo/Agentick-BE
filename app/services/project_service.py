@@ -24,7 +24,7 @@ class ProjectService(BaseService):
         task_status_repository: TaskStatusRepository,
         task_type_repository: TaskTypeRepository,
         task_priority_repository: TaskPriorityRepository,
-        task_repository = None,
+        task_repository=None,
     ) -> None:
         super().__init__(repository=project_repository)
         self._team_repository = team_repository
@@ -289,13 +289,13 @@ class ProjectService(BaseService):
         projects = self._repository.get_my_projects(
             current_user.id, team_id=find_query.team_id__eq
         )
-        
+
         if self._task_repository and projects:
             project_ids = [p.id for p in projects]
             stats_map = self._task_repository.get_projects_stats(project_ids)
             for p in projects:
                 p.stats = stats_map.get(p.id)
-                
+
         return {
             "founds": projects,
             "search_options": {

@@ -106,7 +106,9 @@ def get_my_tasks_overview(
         team_id=team_id,
         client_today=client_today,
     )
-    return ResponseSchema(data=result, message="My tasks overview generated successfully")
+    return ResponseSchema(
+        data=result, message="My tasks overview generated successfully"
+    )
 
 
 @router.get("/me/stats", response_model=ResponseSchema[dict])

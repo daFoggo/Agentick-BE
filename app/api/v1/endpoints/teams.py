@@ -36,7 +36,7 @@ def get_team_service(db=Depends(get_db)) -> TeamService:
     return TeamService(
         team_repository=team_repository,
         team_member_repository=team_member_repository,
-        task_repository=task_repository
+        task_repository=task_repository,
     )
 
 

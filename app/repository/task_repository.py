@@ -106,26 +106,40 @@ class TaskRepository(BaseRepository):
                     if f_key in data and getattr(item, f_key) != data[f_key]:
                         old_raw = getattr(item, f_key)
                         new_raw = data[f_key]
-                        
+
                         # Small safety to not create noise on null -> "" migrations etc.
                         old_v = str(old_raw) if old_raw is not None else None
                         new_v = str(new_raw) if new_raw is not None else None
-                        
+
                         if old_v == new_v:
                             continue
 
                         # Lookup friendly names for relations instead of recording raw IDs
                         if f_key == "status_id":
                             old_v = item.status.name if item.status else old_v
-                            new_entity = session.query(TaskStatus).filter_by(id=new_raw).first() if new_raw else None
+                            new_entity = (
+                                session.query(TaskStatus).filter_by(id=new_raw).first()
+                                if new_raw
+                                else None
+                            )
                             new_v = new_entity.name if new_entity else new_v
                         elif f_key == "priority_id":
                             old_v = item.priority.name if item.priority else old_v
-                            new_entity = session.query(TaskPriority).filter_by(id=new_raw).first() if new_raw else None
+                            new_entity = (
+                                session.query(TaskPriority)
+                                .filter_by(id=new_raw)
+                                .first()
+                                if new_raw
+                                else None
+                            )
                             new_v = new_entity.name if new_entity else new_v
                         elif f_key == "type_id":
                             old_v = item.type.name if item.type else old_v
-                            new_entity = session.query(TaskType).filter_by(id=new_raw).first() if new_raw else None
+                            new_entity = (
+                                session.query(TaskType).filter_by(id=new_raw).first()
+                                if new_raw
+                                else None
+                            )
                             new_v = new_entity.name if new_entity else new_v
 
                         act_type = (
@@ -146,32 +160,39 @@ class TaskRepository(BaseRepository):
                 if member_ids is not None:
                     current_member_ids = {m.user_id for m in item.task_members}
                     new_member_ids = set(member_ids)
-                    
+
                     added_uids = new_member_ids - current_member_ids
                     removed_uids = current_member_ids - new_member_ids
 
                     if added_uids or removed_uids:
                         from app.model.user import User
+
                         affected_uids = list(added_uids | removed_uids)
-                        users = session.query(User).filter(User.id.in_(affected_uids)).all()
+                        users = (
+                            session.query(User).filter(User.id.in_(affected_uids)).all()
+                        )
                         user_map = {u.id: u.name for u in users}
-                        
+
                         for uid in added_uids:
                             u_name = user_map.get(uid, "Unknown User")
-                            session.add(TaskActivity(
-                                task_id=id,
-                                user_id=user_id,
-                                activity_type="member_add",
-                                new_value=u_name,
-                            ))
+                            session.add(
+                                TaskActivity(
+                                    task_id=id,
+                                    user_id=user_id,
+                                    activity_type="member_add",
+                                    new_value=u_name,
+                                )
+                            )
                         for uid in removed_uids:
                             u_name = user_map.get(uid, "Unknown User")
-                            session.add(TaskActivity(
-                                task_id=id,
-                                user_id=user_id,
-                                activity_type="member_remove",
-                                old_value=u_name,
-                            ))
+                            session.add(
+                                TaskActivity(
+                                    task_id=id,
+                                    user_id=user_id,
+                                    activity_type="member_remove",
+                                    old_value=u_name,
+                                )
+                            )
 
             # Check if the status change specifically requires trigger
             if "status_id" in data and data["status_id"] != item.status_id:
@@ -338,7 +359,11 @@ class TaskRepository(BaseRepository):
             return query.order_by(self.model.id.desc()).all()
 
     def get_my_tasks_overview(
-        self, user_id: str, user_member_ids: list[str], team_id: str | None = None, client_today=None
+        self,
+        user_id: str,
+        user_member_ids: list[str],
+        team_id: str | None = None,
+        client_today=None,
     ):
         from datetime import datetime, timezone
 
@@ -380,11 +405,7 @@ class TaskRepository(BaseRepository):
             else:
                 upcoming.append(t)
 
-        return {
-            "in_progress": in_progress,
-            "upcoming": upcoming,
-            "overdue": overdue
-        }
+        return {"in_progress": in_progress, "upcoming": upcoming, "overdue": overdue}
 
     def get_user_completed_tasks_count(self, user_id: str, since) -> int:
         with self.session_factory() as session:
@@ -523,7 +544,7 @@ class TaskRepository(BaseRepository):
                 .join(self.model, self.model.id == TaskActivity.task_id)
                 .filter(
                     self.model.project_id == project_id,
-                    TaskActivity.activity_type == "status_change"
+                    TaskActivity.activity_type == "status_change",
                 )
                 .options(joinedload(TaskActivity.task), joinedload(TaskActivity.user))
                 .order_by(TaskActivity.created_at.desc())
@@ -545,9 +566,9 @@ class TaskRepository(BaseRepository):
                     .filter(
                         TaskStatus.project_id == project_id,
                         (
-                            (TaskStatus.id.in_(status_ids)) |
-                            (TaskStatus.name.in_(status_ids))
-                        )
+                            (TaskStatus.id.in_(status_ids))
+                            | (TaskStatus.name.in_(status_ids))
+                        ),
                     )
                     .all()
                 )
@@ -685,13 +706,13 @@ class TaskRepository(BaseRepository):
                 session.query(
                     self.model.project_id,
                     func.count(self.model.id).label("total"),
-                    func.sum(cast(TaskStatus.is_completed, Integer)).label("completed")
+                    func.sum(cast(TaskStatus.is_completed, Integer)).label("completed"),
                 )
                 .join(TaskStatus, TaskStatus.id == self.model.status_id)
                 .filter(
                     self.model.project_id.in_(project_ids),
                     self.model.is_deleted.is_(False),
-                    self.model.is_archived.is_(False)
+                    self.model.is_archived.is_(False),
                 )
                 .group_by(self.model.project_id)
                 .all()
@@ -701,7 +722,7 @@ class TaskRepository(BaseRepository):
                 row.project_id: {
                     "total_tasks": row.total,
                     "completed_tasks": int(row.completed or 0),
-                    "weekly_activity": [0] * 7
+                    "weekly_activity": [0] * 7,
                 }
                 for row in counts_query
             }
@@ -712,22 +733,21 @@ class TaskRepository(BaseRepository):
                     stats_map[pid] = {
                         "total_tasks": 0,
                         "completed_tasks": 0,
-                        "weekly_activity": [0] * 7
+                        "weekly_activity": [0] * 7,
                     }
 
             # 2. Daily Activity (TaskActivity count)
             now = datetime.now(timezone.utc)
-            seven_days_ago = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
+            seven_days_ago = now.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) - timedelta(days=6)
 
             activity_query = (
-                session.query(
-                    self.model.project_id,
-                    TaskActivity.created_at
-                )
+                session.query(self.model.project_id, TaskActivity.created_at)
                 .join(TaskActivity, TaskActivity.task_id == self.model.id)
                 .filter(
                     self.model.project_id.in_(project_ids),
-                    TaskActivity.created_at >= seven_days_ago
+                    TaskActivity.created_at >= seven_days_ago,
                 )
                 .all()
             )
@@ -757,7 +777,7 @@ class TaskRepository(BaseRepository):
                 session.query(
                     Project.team_id,
                     func.count(self.model.id).label("total"),
-                    func.sum(cast(TaskStatus.is_completed, Integer)).label("completed")
+                    func.sum(cast(TaskStatus.is_completed, Integer)).label("completed"),
                 )
                 .join(Project, Project.id == self.model.project_id)
                 .join(TaskStatus, TaskStatus.id == self.model.status_id)
@@ -765,7 +785,7 @@ class TaskRepository(BaseRepository):
                     Project.team_id.in_(team_ids),
                     self.model.is_deleted.is_(False),
                     self.model.is_archived.is_(False),
-                    Project.is_deleted.is_(False)
+                    Project.is_deleted.is_(False),
                 )
                 .group_by(Project.team_id)
                 .all()
@@ -775,7 +795,7 @@ class TaskRepository(BaseRepository):
                 row.team_id: {
                     "total_tasks": row.total,
                     "completed_tasks": int(row.completed or 0),
-                    "weekly_activity": [0] * 7
+                    "weekly_activity": [0] * 7,
                 }
                 for row in counts_query
             }
@@ -785,24 +805,23 @@ class TaskRepository(BaseRepository):
                     stats_map[tid] = {
                         "total_tasks": 0,
                         "completed_tasks": 0,
-                        "weekly_activity": [0] * 7
+                        "weekly_activity": [0] * 7,
                     }
 
             # 2. Activity
             now = datetime.now(timezone.utc)
-            seven_days_ago = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
+            seven_days_ago = now.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) - timedelta(days=6)
 
             activity_query = (
-                session.query(
-                    Project.team_id,
-                    TaskActivity.created_at
-                )
+                session.query(Project.team_id, TaskActivity.created_at)
                 .join(self.model, self.model.id == TaskActivity.task_id)
                 .join(Project, Project.id == self.model.project_id)
                 .filter(
                     Project.team_id.in_(team_ids),
                     TaskActivity.created_at >= seven_days_ago,
-                    Project.is_deleted.is_(False)
+                    Project.is_deleted.is_(False),
                 )
                 .all()
             )

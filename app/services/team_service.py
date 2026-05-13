@@ -11,7 +11,7 @@ class TeamService(BaseService):
         self,
         team_repository: TeamRepository,
         team_member_repository: TeamMemberRepository,
-        task_repository = None,
+        task_repository=None,
     ) -> None:
         super().__init__(repository=team_repository)
         self._team_member_repository = team_member_repository
@@ -33,11 +33,11 @@ class TeamService(BaseService):
         team = self._repository.read_by_id(team_id)
         if not team or team.is_deleted:
             raise NotFoundError(detail="Team not found.")
-        
+
         if self._task_repository:
             stats = self._task_repository.get_teams_stats([team_id])
             team.stats = stats.get(team_id)
-            
+
         return team
 
     def update_team(self, team_id: str, schema: TeamUpdate, current_user: User):

@@ -67,14 +67,19 @@ class TaskService(BaseService):
             user_id=user_id, user_member_ids=user_member_ids, team_id=team_id
         )
 
-    def get_my_tasks_overview(self, user_id: str, team_id: str | None = None, client_today=None):
+    def get_my_tasks_overview(
+        self, user_id: str, team_id: str | None = None, client_today=None
+    ):
         if not self.project_member_repo:
             return {"in_progress": [], "upcoming": [], "overdue": []}
         user_member_ids = self.project_member_repo.get_member_ids_by_user(user_id)
         if not user_member_ids:
             return {"in_progress": [], "upcoming": [], "overdue": []}
         return self._repository.get_my_tasks_overview(
-            user_id=user_id, user_member_ids=user_member_ids, team_id=team_id, client_today=client_today
+            user_id=user_id,
+            user_member_ids=user_member_ids,
+            team_id=team_id,
+            client_today=client_today,
         )
 
     def get_project_stats(self, project_id: str, period: str):
