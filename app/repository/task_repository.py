@@ -94,8 +94,8 @@ class TaskRepository(BaseRepository):
                     "title": "title",
                     "due_date": "due_date",
                     "description": "description",
-                    "phase_id": "phase",
                     "estimated_hours": "estimated_hours",
+                    "parent_id": "parent_task",
                 }
 
                 from app.model.task_status import TaskStatus
@@ -141,6 +141,14 @@ class TaskRepository(BaseRepository):
                                 else None
                             )
                             new_v = new_entity.name if new_entity else new_v
+                        elif f_key == "parent_id":
+                            old_v = item.parent.title if item.parent else old_v
+                            new_entity = (
+                                session.query(self.model).filter_by(id=new_raw).first()
+                                if new_raw
+                                else None
+                            )
+                            new_v = new_entity.title if new_entity else new_v
 
                         act_type = (
                             "status_change" if f_key == "status_id" else "field_change"
@@ -236,6 +244,27 @@ class TaskRepository(BaseRepository):
                             )
                         else:
                             latest_snapshot.prediction_error_hours = 0.0
+
+                    # 3. Auto-calculate actual_hours if not already set (or if logs exist)
+                    from app.model.task_time_log import TaskTimeLog
+                    from sqlalchemy import func
+
+                    # Priority 1: Sum of explicit time logs
+                    total_logged = (
+                        session.query(func.sum(TaskTimeLog.hours))
+                        .filter(TaskTimeLog.task_id == id)
+                        .scalar()
+                        or 0.0
+                    )
+
+                    if total_logged > 0:
+                        item.actual_hours = float(total_logged)
+                    elif item.started_at and item.actual_hours == 0.0:
+                        # Priority 2: Simple time delta if no logs and field is empty
+                        duration = (
+                            item.completed_at - item.started_at
+                        ).total_seconds() / 3600.0
+                        item.actual_hours = round(max(0.0, duration), 2)
 
             for key, value in data.items():
                 setattr(item, key, value)

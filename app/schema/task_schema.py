@@ -22,7 +22,6 @@ class TaskBase(BaseModel):
     type_id: str
     priority_id: str
     member_ids: Optional[List[str]] = None
-    phase_id: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     due_date: datetime
@@ -42,7 +41,6 @@ class TaskCreate(BaseModel):
     type_id: str
     priority_id: str
     member_ids: Optional[List[str]] = None
-    phase_id: Optional[str] = None
     started_at: Optional[datetime] = None
     due_date: datetime
     order: Optional[float] = Field(None, ge=0)
@@ -56,7 +54,6 @@ class TaskUpdate(BaseModel):
     type_id: Optional[str] = None
     priority_id: Optional[str] = None
     member_ids: Optional[List[str]] = None
-    phase_id: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
@@ -64,6 +61,7 @@ class TaskUpdate(BaseModel):
     is_archived: Optional[bool] = None
     estimated_hours: Optional[float] = None
     actual_hours: Optional[float] = None
+    parent_id: Optional[str] = None
 
 
 class TaskRead(ModelBaseInfo):
@@ -75,7 +73,6 @@ class TaskRead(ModelBaseInfo):
     type_id: str
     priority_id: str
     member_ids: Optional[List[str]] = None
-    phase_id: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     due_date: Optional[datetime] = None

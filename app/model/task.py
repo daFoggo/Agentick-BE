@@ -7,7 +7,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.model.base_model import BaseModel
 
 if TYPE_CHECKING:
-    from app.model.phase import Phase
     from app.model.project import Project
     from app.model.tag import Tag
     from app.model.task_member import TaskMember
@@ -54,9 +53,6 @@ class Task(BaseModel):
         String(36), ForeignKey("task_priority.id"), nullable=False
     )
 
-    phase_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("phase.id"), nullable=True
-    )
 
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -84,7 +80,6 @@ class Task(BaseModel):
         "TaskMember", back_populates="task", cascade="all, delete-orphan"
     )
 
-    phase: Mapped["Phase"] = relationship("Phase", back_populates="tasks")
     tags: Mapped[list["Tag"]] = relationship(
         "Tag", secondary=task_tag, back_populates="tasks"
     )

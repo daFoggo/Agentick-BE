@@ -48,9 +48,9 @@ class TaskService(BaseService):
 
     def get_gantt_data(self, project_id: str):
         """
-        Fetches all tasks for a project, including phase and assignee info.
+        Fetches all tasks for a project, including assignee info.
         """
-        # Using read_by_options with eager=True to get status, phase, assignee
+        # Using read_by_options with eager=True to get status, assignee
         result = self._repository.read_by_options(
             {"project_id__eq": project_id, "is_deleted__eq": False, "page_size": "all"},
             eager=True,
@@ -286,6 +286,25 @@ class TaskService(BaseService):
                 progress_pct=100,
             )
             session.add(checkpoint)
+
+            # 4. Auto-calculate actual_hours if not already set (or if logs exist)
+            from app.model.task_time_log import TaskTimeLog
+            from sqlalchemy import func
+
+            total_logged = (
+                session.query(func.sum(TaskTimeLog.hours))
+                .filter(TaskTimeLog.task_id == id)
+                .scalar()
+                or 0.0
+            )
+
+            if total_logged > 0:
+                task.actual_hours = float(total_logged)
+            elif task.started_at and task.actual_hours == 0.0:
+                duration = (
+                    task.completed_at - task.started_at
+                ).total_seconds() / 3600.0
+                task.actual_hours = round(max(0.0, duration), 2)
 
             session.commit()
             return self.get_by_id(id)

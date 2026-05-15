@@ -3,7 +3,6 @@ from app.model.event import Event
 from app.model.task_activity import TaskActivity
 from app.model.invitation import Invitation
 from app.model.notification import Notification
-from app.model.phase import Phase
 from app.model.project import Project
 from app.model.project_member import ProjectMember
 from app.model.risk_snapshot import RiskSnapshot
@@ -27,7 +26,6 @@ __all__ = [
     "TeamMember",
     "Project",
     "ProjectMember",
-    "Phase",
     "Tag",
     "TaskStatus",
     "TaskType",
