@@ -224,7 +224,11 @@ class TestingService:
         db.flush()
 
         # 8. Schedules
-        for user_id in [mock_dev.id, mock_tester.id]:
+        # Risk analysis uses the task "lead" member as the primary assignee for
+        # availability calculations, so every seeded task participant needs a
+        # schedule. Without the target user's schedule, seeded risks incorrectly
+        # become schedule bottlenecks after the task-member refactor.
+        for user_id in [target_user.id, mock_dev.id, mock_tester.id]:
             for d in range(7):
                 is_off = d in [5, 6]
                 sched = WorkSchedule(

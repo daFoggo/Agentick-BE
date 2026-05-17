@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 
 from app.api.v1.endpoints.project_tasks import get_task_service
 from app.core.dependencies import get_current_active_user, get_db
+from app.core.exceptions import AuthError, NotFoundError
 from app.model.user import User
 from app.schema.base_schema import ResponseSchema
 from app.services.risk_analysis_service import RiskAnalysisService
@@ -119,6 +120,14 @@ async def generate_test_data(
     Special debug endpoint to generate realistic enterprise test datasets.
     Uses TestingService backend to insulate controller logic.
     """
+    if user_id and user_id != current_user.id and not current_user.is_superuser:
+        raise AuthError(
+            detail="Only superusers can generate test data for another user."
+        )
+
+    if user_id and db.get(User, user_id) is None:
+        raise NotFoundError(detail=f"User with ID {user_id} not found.")
+
     data = TestingService.generate_mock_project_data(
         db=db,
         current_user=current_user,
