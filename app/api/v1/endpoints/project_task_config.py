@@ -6,6 +6,9 @@ from app.core.dependencies import get_current_active_user, get_db
 from app.core.exceptions import NotFoundError
 from app.model.user import User
 from app.repository.tag_repository import TagRepository
+from app.repository.project_member_repository import ProjectMemberRepository
+from app.repository.project_repository import ProjectRepository
+from app.repository.team_member_repository import TeamMemberRepository
 from app.repository.task_priority_repository import TaskPriorityRepository
 from app.repository.task_status_repository import TaskStatusRepository
 from app.repository.task_type_repository import TaskTypeRepository
@@ -30,6 +33,7 @@ from app.schema.task_type_schema import (
     TaskTypeUpdate,
 )
 from app.services.tag_service import TagService
+from app.services.project_permission_service import ProjectPermissionService
 from app.services.task_priority_service import TaskPriorityService
 from app.services.task_status_service import TaskStatusService
 from app.services.task_type_service import TaskTypeService
@@ -57,6 +61,14 @@ def get_tag_service(db=Depends(get_db)) -> TagService:
     return TagService(repository=TagRepository(lambda: nullcontext(db)))
 
 
+def get_project_permission_service(db=Depends(get_db)) -> ProjectPermissionService:
+    return ProjectPermissionService(
+        project_repository=ProjectRepository(lambda: nullcontext(db)),
+        project_member_repository=ProjectMemberRepository(lambda: nullcontext(db)),
+        team_member_repository=TeamMemberRepository(lambda: nullcontext(db)),
+    )
+
+
 def _ensure_same_project(record_project_id: str, project_id: str, entity_name: str):
     if record_project_id != project_id:
         raise NotFoundError(detail=f"{entity_name} not found.")
@@ -68,7 +80,11 @@ def create_status(
     schema: TaskStatusCreate,
     current_user: User = Depends(get_current_active_user),
     service: TaskStatusService = Depends(get_task_status_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     scoped_schema = schema.model_copy(update={"project_id": project_id})
     result = service.add(scoped_schema)
     return ResponseSchema(data=result, message="Task status created successfully")
@@ -80,7 +96,11 @@ def get_statuses(
     find_query: TaskStatusFind = Depends(),
     current_user: User = Depends(get_current_active_user),
     service: TaskStatusService = Depends(get_task_status_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     scoped_find = find_query.model_copy(update={"project_id__eq": project_id})
     result = service.get_list(scoped_find)
     return ResponseSchema(data=result)
@@ -93,7 +113,11 @@ def update_status(
     schema: TaskStatusUpdate,
     current_user: User = Depends(get_current_active_user),
     service: TaskStatusService = Depends(get_task_status_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     status = service.get_by_id(status_id)
     _ensure_same_project(status.project_id, project_id, "Task status")
     result = service.patch(status_id, schema)
@@ -106,7 +130,11 @@ def delete_status(
     status_id: str,
     current_user: User = Depends(get_current_active_user),
     service: TaskStatusService = Depends(get_task_status_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     status = service.get_by_id(status_id)
     _ensure_same_project(status.project_id, project_id, "Task status")
     service.remove_by_id(status_id)
@@ -119,7 +147,11 @@ def create_type(
     schema: TaskTypeCreate,
     current_user: User = Depends(get_current_active_user),
     service: TaskTypeService = Depends(get_task_type_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     scoped_schema = schema.model_copy(update={"project_id": project_id})
     result = service.add(scoped_schema)
     return ResponseSchema(data=result, message="Task type created successfully")
@@ -131,7 +163,11 @@ def get_types(
     find_query: TaskTypeFind = Depends(),
     current_user: User = Depends(get_current_active_user),
     service: TaskTypeService = Depends(get_task_type_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     scoped_find = find_query.model_copy(update={"project_id__eq": project_id})
     result = service.get_list(scoped_find)
     return ResponseSchema(data=result)
@@ -144,7 +180,11 @@ def update_type(
     schema: TaskTypeUpdate,
     current_user: User = Depends(get_current_active_user),
     service: TaskTypeService = Depends(get_task_type_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     task_type = service.get_by_id(type_id)
     _ensure_same_project(task_type.project_id, project_id, "Task type")
     result = service.patch(type_id, schema)
@@ -157,7 +197,11 @@ def delete_type(
     type_id: str,
     current_user: User = Depends(get_current_active_user),
     service: TaskTypeService = Depends(get_task_type_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     task_type = service.get_by_id(type_id)
     _ensure_same_project(task_type.project_id, project_id, "Task type")
     service.remove_by_id(type_id)
@@ -170,7 +214,11 @@ def create_priority(
     schema: TaskPriorityCreate,
     current_user: User = Depends(get_current_active_user),
     service: TaskPriorityService = Depends(get_task_priority_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     scoped_schema = schema.model_copy(update={"project_id": project_id})
     result = service.add(scoped_schema)
     return ResponseSchema(data=result, message="Task priority created successfully")
@@ -182,7 +230,11 @@ def get_priorities(
     find_query: TaskPriorityFind = Depends(),
     current_user: User = Depends(get_current_active_user),
     service: TaskPriorityService = Depends(get_task_priority_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     scoped_find = find_query.model_copy(update={"project_id__eq": project_id})
     result = service.get_list(scoped_find)
     return ResponseSchema(data=result)
@@ -197,7 +249,11 @@ def update_priority(
     schema: TaskPriorityUpdate,
     current_user: User = Depends(get_current_active_user),
     service: TaskPriorityService = Depends(get_task_priority_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     priority = service.get_by_id(priority_id)
     _ensure_same_project(priority.project_id, project_id, "Task priority")
     result = service.patch(priority_id, schema)
@@ -210,7 +266,11 @@ def delete_priority(
     priority_id: str,
     current_user: User = Depends(get_current_active_user),
     service: TaskPriorityService = Depends(get_task_priority_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     priority = service.get_by_id(priority_id)
     _ensure_same_project(priority.project_id, project_id, "Task priority")
     service.remove_by_id(priority_id)
@@ -223,7 +283,11 @@ def create_tag(
     schema: TagCreate,
     current_user: User = Depends(get_current_active_user),
     service: TagService = Depends(get_tag_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     scoped_schema = schema.model_copy(update={"project_id": project_id})
     result = service.add(scoped_schema)
     return ResponseSchema(data=result, message="Tag created successfully")
@@ -235,7 +299,11 @@ def get_tags(
     find_query: TagFind = Depends(),
     current_user: User = Depends(get_current_active_user),
     service: TagService = Depends(get_tag_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     scoped_find = find_query.model_copy(update={"project_id__eq": project_id})
     result = service.get_list(scoped_find)
     return ResponseSchema(data=result)
@@ -248,7 +316,11 @@ def update_tag(
     schema: TagUpdate,
     current_user: User = Depends(get_current_active_user),
     service: TagService = Depends(get_tag_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     tag = service.get_by_id(tag_id)
     _ensure_same_project(tag.project_id, project_id, "Tag")
     result = service.patch(tag_id, schema)
@@ -261,7 +333,11 @@ def delete_tag(
     tag_id: str,
     current_user: User = Depends(get_current_active_user),
     service: TagService = Depends(get_tag_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_manage(project_id, current_user.id)
     tag = service.get_by_id(tag_id)
     _ensure_same_project(tag.project_id, project_id, "Tag")
     service.remove_by_id(tag_id)

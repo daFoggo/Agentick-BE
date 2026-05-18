@@ -82,8 +82,12 @@ def get_my_teams(
 
 
 @router.get("/{team_id}", response_model=ResponseSchema[TeamRead])
-def get_team(team_id: str, service: TeamService = Depends(get_team_service)):
-    result = service.get_team_details(team_id)
+def get_team(
+    team_id: str,
+    current_user: User = Depends(get_current_active_user),
+    service: TeamService = Depends(get_team_service),
+):
+    result = service.get_team_details_for_user(team_id, current_user)
     return ResponseSchema(data=result)
 
 
@@ -117,8 +121,10 @@ def delete_team(
 def get_team_members(
     team_id: str,
     find_query: TeamMemberFind = Depends(),
+    current_user: User = Depends(get_current_active_user),
     service: TeamMemberService = Depends(get_team_member_service),
 ):
+    service.check_permission(team_id, current_user.id, "viewer")
     find_query.team_id__eq = team_id
     result = service.get_members(find_query)
     return ResponseSchema(data=result)
@@ -131,8 +137,10 @@ def get_team_members(
 def get_member_project_count(
     team_id: str,
     user_id: str,
+    current_user: User = Depends(get_current_active_user),
     service: TeamMemberService = Depends(get_team_member_service),
 ):
+    service.check_permission(team_id, current_user.id, "manager")
     count = service.get_member_project_count(team_id, user_id)
     return ResponseSchema(data=TeamMemberProjectCount(count=count))
 

@@ -53,7 +53,6 @@ class Task(BaseModel):
         String(36), ForeignKey("task_priority.id"), nullable=False
     )
 
-
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -1,6 +1,7 @@
 from app.repository.team_repository import TeamRepository
 from app.repository.team_member_repository import TeamMemberRepository
 from app.schema.team_schema import TeamCreate, TeamUpdate
+from app.schema.team_member_schema import TeamMemberFind
 from app.services.base_service import BaseService
 from app.model.user import User
 from app.core.exceptions import AuthError, NotFoundError
@@ -40,17 +41,32 @@ class TeamService(BaseService):
 
         return team
 
-    def update_team(self, team_id: str, schema: TeamUpdate, current_user: User):
+    def _ensure_team_role(self, team_id: str, user_id: str, allowed_roles: set[str]):
         team = self.get_team_details(team_id)
-        if team.owner_id != current_user.id:
-            raise AuthError(detail="Only the owner can update the team.")
+        current_member = self._team_member_repository.read_by_options(
+            TeamMemberFind(team_id__eq=team_id, user_id__eq=user_id)
+        )
+        if not current_member.get("founds"):
+            raise AuthError(detail="You are not a member of this team.")
+
+        role = current_member["founds"][0].role
+        if role not in allowed_roles:
+            raise AuthError(detail="Insufficient privileges for this team.")
+
+        return team
+
+    def get_team_details_for_user(self, team_id: str, current_user: User):
+        return self._ensure_team_role(
+            team_id, current_user.id, {"owner", "manager", "member", "viewer"}
+        )
+
+    def update_team(self, team_id: str, schema: TeamUpdate, current_user: User):
+        self._ensure_team_role(team_id, current_user.id, {"owner"})
 
         return self._repository.update(team_id, schema)
 
     def delete_team(self, team_id: str, current_user: User):
-        team = self.get_team_details(team_id)
-        if team.owner_id != current_user.id:
-            raise AuthError(detail="Only the owner can delete the team.")
+        self._ensure_team_role(team_id, current_user.id, {"owner"})
 
         # Soft delete
         return self._repository.update_attr(team_id, "is_deleted", True)

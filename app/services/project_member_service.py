@@ -40,11 +40,26 @@ class ProjectMemberService(BaseService):
         ]:
             raise AuthError(detail="Insufficient privileges to manage project members.")
 
+    def _ensure_project_or_team_manager(self, project_id: str, user_id: str):
+        project = self._get_project_or_raise(project_id)
+        project_member = self._repository.read_by_options(
+            ProjectMemberFind(project_id__eq=project_id, user_id__eq=user_id)
+        )
+        project_role = (
+            project_member["founds"][0].role if project_member.get("founds") else None
+        )
+        team_member = self._team_member_repository.read_by_options(
+            TeamMemberFind(team_id__eq=project.team_id, user_id__eq=user_id)
+        )
+        team_role = team_member["founds"][0].role if team_member.get("founds") else None
+        if project_role in {"owner", "manager"} or team_role in {"owner", "manager"}:
+            return project
+        raise AuthError(detail="Insufficient privileges to manage project members.")
+
     def add_member(
         self, project_id: str, schema: ProjectMemberCreate, current_user: User
     ):
-        project = self._get_project_or_raise(project_id)
-        self._ensure_team_manager(project.team_id, current_user.id)
+        project = self._ensure_project_or_team_manager(project_id, current_user.id)
 
         target_team_member = self._team_member_repository.read_by_options(
             TeamMemberFind(team_id__eq=project.team_id, user_id__eq=schema.user_id)
@@ -85,8 +100,7 @@ class ProjectMemberService(BaseService):
     def generate_invite_token(
         self, project_id: str, email: str, role: str, current_user: User
     ) -> str:
-        project = self._get_project_or_raise(project_id)
-        self._ensure_team_manager(project.team_id, current_user.id)
+        self._ensure_project_or_team_manager(project_id, current_user.id)
 
         subject = {
             "project_id": project_id,
@@ -150,8 +164,7 @@ class ProjectMemberService(BaseService):
         schema: ProjectMemberUpdate,
         current_user: User,
     ):
-        project = self._get_project_or_raise(project_id)
-        self._ensure_team_manager(project.team_id, current_user.id)
+        self._ensure_project_or_team_manager(project_id, current_user.id)
 
         target_member = self._repository.read_by_options(
             ProjectMemberFind(project_id__eq=project_id, user_id__eq=user_id)
@@ -162,9 +175,8 @@ class ProjectMemberService(BaseService):
         return self._repository.update(target_member["founds"][0].id, schema)
 
     def remove_member(self, project_id: str, user_id: str, current_user: User):
-        project = self._get_project_or_raise(project_id)
         if user_id != current_user.id:
-            self._ensure_team_manager(project.team_id, current_user.id)
+            self._ensure_project_or_team_manager(project_id, current_user.id)
 
         target_member = self._repository.read_by_options(
             ProjectMemberFind(project_id__eq=project_id, user_id__eq=user_id)
@@ -185,9 +197,7 @@ class ProjectMemberService(BaseService):
         self, project_id: str, user_id: str, required_role: str = "manager"
     ):
         """Checks if a user has sufficient role in the project's team."""
-        project = self._get_project_or_raise(project_id)
-        # For now, project management permission is tied to team role
-        return self._ensure_team_manager(project.team_id, user_id)
+        return self._ensure_project_or_team_manager(project_id, user_id)
 
     def is_user_member(self, project_id: str, user_id: str) -> bool:
         """Checks if a user is a member of the project."""

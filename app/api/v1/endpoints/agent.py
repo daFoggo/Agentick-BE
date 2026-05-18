@@ -1,6 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends
 
 from app.api.v1.endpoints.project_tasks import get_task_service
+from app.api.v1.endpoints.projects import get_project_permission_service
 from app.core.dependencies import get_current_active_user, get_db
 from app.core.exceptions import AuthError, NotFoundError
 from app.model.user import User
@@ -8,6 +9,7 @@ from app.schema.base_schema import ResponseSchema
 from app.services.risk_analysis_service import RiskAnalysisService
 from app.services.task_service import TaskService
 from app.services.testing_service import TestingService
+from app.services.project_permission_service import ProjectPermissionService
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -21,7 +23,11 @@ async def analyze_task_risk(
     task_id: str,
     current_user: User = Depends(get_current_active_user),
     service: RiskAnalysisService = Depends(get_risk_analysis_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_task_write(task_id, current_user.id)
     result = await service.analyze_task(task_id=task_id)
     return ResponseSchema(
         data={
@@ -45,6 +51,9 @@ async def trigger_agent_outreach(
     Trigger the programmatic stale task and missing data detection cycle,
     then compose and send personalized outreach emails via Gmail in the background.
     """
+    if not current_user.is_superuser:
+        raise AuthError(detail="Only superusers can trigger global outreach.")
+
     from app.core.dependencies import get_database
     from app.services.agent_outreach_service import AgentOutreachService
 
@@ -68,6 +77,9 @@ async def analyze_project_risk(
     project_id: str,
     current_user: User = Depends(get_current_active_user),
     task_service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
     """
     Trigger risk analysis for all active tasks in a project in parallel.
@@ -77,6 +89,7 @@ async def analyze_project_risk(
 
     from app.core.dependencies import get_database
 
+    permission_service.ensure_project_manage(project_id, current_user.id)
     active_task_ids = task_service._repository.get_active_task_ids_by_project(
         project_id
     )
@@ -150,6 +163,9 @@ async def trigger_morning_scan_manually(
     Emergency trigger for demo purposes. Forces morning risk scan immediately on ALL tasks
     without waiting for project's local 9:00 AM.
     """
+    if not current_user.is_superuser:
+        raise AuthError(detail="Only superusers can trigger global morning scans.")
+
     from app.core.dependencies import get_database
     from app.services.testing_service import TestingService
 
@@ -169,11 +185,19 @@ async def trigger_evening_summary_manually(
     background_tasks: BackgroundTasks,
     project_id: str | None = None,
     current_user: User = Depends(get_current_active_user),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
     """
     Emergency trigger for demo purposes. Forces the dispatch of the Daily Risk Summary Email report immediately
     to the project team lead without waiting for the scheduled cycle.
     """
+    if project_id:
+        permission_service.ensure_project_manage(project_id, current_user.id)
+    elif not current_user.is_superuser:
+        raise AuthError(detail="Only superusers can trigger global summaries.")
+
     from app.core.dependencies import get_database
     from app.services.testing_service import TestingService
 

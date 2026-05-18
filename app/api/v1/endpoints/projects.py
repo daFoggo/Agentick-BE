@@ -36,6 +36,7 @@ from app.schema.task_schema import (
     TaskRead,
 )
 from app.services.project_member_service import ProjectMemberService
+from app.services.project_permission_service import ProjectPermissionService
 from app.services.project_service import ProjectService
 from app.services.invitation_service import InvitationService
 from app.api.v1.endpoints.invitations import get_invitation_service
@@ -76,6 +77,15 @@ def get_project_member_service(db=Depends(get_db)) -> ProjectMemberService:
         project_member_repository=project_member_repository,
         project_repository=project_repository,
         team_member_repository=team_member_repository,
+    )
+
+
+def get_project_permission_service(db=Depends(get_db)) -> ProjectPermissionService:
+    return ProjectPermissionService(
+        project_repository=ProjectRepository(lambda: nullcontext(db)),
+        project_member_repository=ProjectMemberRepository(lambda: nullcontext(db)),
+        team_member_repository=TeamMemberRepository(lambda: nullcontext(db)),
+        task_repository=TaskRepository(lambda: nullcontext(db)),
     )
 
 
@@ -245,7 +255,11 @@ def get_project_gantt(
     project_id: str,
     current_user: User = Depends(get_current_active_user),
     task_service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     result = task_service.get_gantt_data(project_id)
     return ResponseSchema(data=result)
 
@@ -259,11 +273,15 @@ def get_project_member_workload(
     period: Literal["weekly", "monthly"] = Query(default="weekly"),
     current_user: User = Depends(get_current_active_user),
     service: ProjectMemberService = Depends(get_project_member_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
     """
     Workload của từng member trong project — số task/ngày theo tuần hoặc tháng.
     Dùng cho biểu đồ ProjectWorkload trên Dashboard.
     """
+    permission_service.ensure_project_read(project_id, current_user.id)
     result = service.get_project_member_workload(project_id, period)
     return ResponseSchema(
         data=result,
@@ -291,7 +309,11 @@ def get_project_velocity_profile(
     project_id: str,
     current_user: User = Depends(get_current_active_user),
     service: VelocityService = Depends(get_velocity_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     result = service.get_project_velocity_profile(project_id)
     return ResponseSchema(
         data=result, message="Project velocity profile fetched successfully"
@@ -304,6 +326,10 @@ async def estimate_project_task(
     schema: EstimateTaskRequest,
     current_user: User = Depends(get_current_active_user),
     service: EstimationService = Depends(get_estimation_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_task_write(project_id, current_user.id)
     result = await service.estimate_task(project_id, schema.title, schema.description)
     return ResponseSchema(data=result, message="Task estimate generated successfully")

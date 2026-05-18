@@ -257,17 +257,23 @@ class ProjectService(BaseService):
     def update_project(
         self, project_id: str, schema: ProjectUpdate, current_user: User
     ):
-        project = self.get_project_details(project_id, current_user)
-        self._ensure_user_in_team(
-            project.team_id, current_user.id, allow_roles={"owner", "manager"}
+        self.get_project_details(project_id, current_user)
+        member = self._project_member_repository.read_by_options(
+            ProjectMemberFind(project_id__eq=project_id, user_id__eq=current_user.id)
         )
+        role = member["founds"][0].role if member.get("founds") else None
+        if role not in {"owner", "manager"}:
+            raise AuthError(detail="Insufficient privileges for this action.")
         return self._repository.update(project_id, schema)
 
     def delete_project(self, project_id: str, current_user: User):
-        project = self.get_project_details(project_id, current_user)
-        self._ensure_user_in_team(
-            project.team_id, current_user.id, allow_roles={"owner", "manager"}
+        self.get_project_details(project_id, current_user)
+        member = self._project_member_repository.read_by_options(
+            ProjectMemberFind(project_id__eq=project_id, user_id__eq=current_user.id)
         )
+        role = member["founds"][0].role if member.get("founds") else None
+        if role not in {"owner", "manager"}:
+            raise AuthError(detail="Insufficient privileges for this action.")
 
         # Soft-delete all tasks of this project and delete their calendar events
         self._repository.cleanup_project_resources_on_delete(project_id)

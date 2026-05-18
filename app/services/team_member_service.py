@@ -34,11 +34,16 @@ class TeamMemberService(BaseService):
         current_member = self._repository.read_by_options(
             TeamMemberFind(team_id__eq=team_id, user_id__eq=current_user.id)
         )
-        if not current_member.get("founds") or current_member["founds"][0].role not in [
+        current_role = (
+            current_member["founds"][0].role if current_member.get("founds") else None
+        )
+        if current_role not in [
             "owner",
             "manager",
         ]:
             raise AuthError(detail="Insufficient privileges to add members.")
+        if schema.role == "owner" and current_role != "owner":
+            raise AuthError(detail="Only owners can add owner members.")
 
         # 3. Check if user already a member
         existing_member = self._repository.read_by_options(
@@ -74,11 +79,16 @@ class TeamMemberService(BaseService):
         current_member = self._repository.read_by_options(
             TeamMemberFind(team_id__eq=team_id, user_id__eq=current_user.id)
         )
-        if not current_member.get("founds") or current_member["founds"][0].role not in [
+        current_role = (
+            current_member["founds"][0].role if current_member.get("founds") else None
+        )
+        if current_role not in [
             "owner",
             "manager",
         ]:
             raise AuthError(detail="Insufficient privileges to generate invites.")
+        if role == "owner" and current_role != "owner":
+            raise AuthError(detail="Only owners can invite owner members.")
 
         subject = {
             "team_id": team_id,
@@ -147,7 +157,29 @@ class TeamMemberService(BaseService):
         if not target_member.get("founds"):
             raise NotFoundError(detail="Member not found.")
 
-        return self._repository.update(target_member["founds"][0].id, schema)
+        current = current_member["founds"][0]
+        target = target_member["founds"][0]
+
+        if current.role != "owner" and (
+            target.role == "owner" or schema.role == "owner"
+        ):
+            raise AuthError(detail="Only owners can assign or modify owner roles.")
+
+        if (
+            target.user_id == current_user.id
+            and target.role == "owner"
+            and schema.role != "owner"
+        ):
+            raise AuthError(detail="Team owners cannot change their own role.")
+
+        if target.role == "owner" and schema.role != "owner":
+            all_owners = self._repository.read_by_options(
+                TeamMemberFind(team_id__eq=team_id, role__eq="owner")
+            )
+            if len(all_owners.get("founds", [])) <= 1:
+                raise AuthError(detail="Cannot demote the only owner of the team.")
+
+        return self._repository.update(target.id, schema)
 
     def remove_member(self, team_id: str, user_id: str, current_user: User):
         # Check permission
@@ -167,8 +199,14 @@ class TeamMemberService(BaseService):
         if not target_member.get("founds"):
             raise NotFoundError(detail="Member not found.")
 
+        current = current_member["founds"][0]
+        target = target_member["founds"][0]
+
+        if current.role != "owner" and target.role == "owner":
+            raise AuthError(detail="Only owners can remove owner members.")
+
         # Prevent removing the only owner
-        if target_member["founds"][0].role == "owner":
+        if target.role == "owner":
             all_owners = self._repository.read_by_options(
                 TeamMemberFind(team_id__eq=team_id, role__eq="owner")
             )
@@ -179,7 +217,7 @@ class TeamMemberService(BaseService):
         self._project_member_repository.remove_from_all_team_projects(team_id, user_id)
 
         # Remove from the team itself
-        return self._repository.delete_by_id(target_member["founds"][0].id)
+        return self._repository.delete_by_id(target.id)
 
     def check_permission(
         self, team_id: str, user_id: str, required_role: str = "manager"
@@ -195,8 +233,8 @@ class TeamMemberService(BaseService):
 
         current_role = members[0].role
 
-        # Role hierarchy: owner > manager > member
-        role_levels = {"owner": 3, "manager": 2, "member": 1}
+        # Role hierarchy: owner > manager > member > viewer
+        role_levels = {"owner": 4, "manager": 3, "member": 2, "viewer": 1}
 
         if role_levels.get(current_role, 0) < role_levels.get(required_role, 0):
             raise AuthError(

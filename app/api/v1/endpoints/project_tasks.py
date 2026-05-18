@@ -7,6 +7,9 @@ from app.core.dependencies import get_current_active_user, get_db
 from app.core.exceptions import NotFoundError
 from app.model.user import User
 from app.repository.task_repository import TaskRepository
+from app.repository.project_member_repository import ProjectMemberRepository
+from app.repository.project_repository import ProjectRepository
+from app.repository.team_member_repository import TeamMemberRepository
 from app.schema.base_schema import FindResult, ResponseSchema
 from app.schema.task_schema import (
     ProjectTaskStats,
@@ -16,6 +19,7 @@ from app.schema.task_schema import (
     TaskUpdate,
 )
 from app.services.task_service import TaskService
+from app.services.project_permission_service import ProjectPermissionService
 
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["project-tasks"])
 
@@ -23,6 +27,15 @@ router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["project-tasks"]
 def get_task_service(db=Depends(get_db)) -> TaskService:
     task_repository = TaskRepository(lambda: nullcontext(db))
     return TaskService(repository=task_repository)
+
+
+def get_project_permission_service(db=Depends(get_db)) -> ProjectPermissionService:
+    return ProjectPermissionService(
+        project_repository=ProjectRepository(lambda: nullcontext(db)),
+        project_member_repository=ProjectMemberRepository(lambda: nullcontext(db)),
+        team_member_repository=TeamMemberRepository(lambda: nullcontext(db)),
+        task_repository=TaskRepository(lambda: nullcontext(db)),
+    )
 
 
 def _ensure_task_in_project(task: TaskRead, project_id: str):
@@ -36,9 +49,13 @@ def create_project_task(
     schema: TaskCreate,
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_task_write(project_id, current_user.id)
     scoped_schema = schema.model_copy(update={"project_id": project_id})
-    result = service.add(scoped_schema)
+    result = service.add(scoped_schema, acting_user_id=current_user.id)
     return ResponseSchema(data=result, message="Task created successfully")
 
 
@@ -48,7 +65,11 @@ def get_project_tasks(
     find_query: TaskFind = Depends(),
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     scoped_find = find_query.model_copy(update={"project_id__eq": project_id})
     result = service.get_list(scoped_find)
     return ResponseSchema(data=result)
@@ -61,6 +82,9 @@ def get_project_task_stats(
     period: Literal["weekly", "monthly"] = Query(default="weekly"),
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
     """
     Thống kê task của project theo Priority, Status và Type.
@@ -68,6 +92,7 @@ def get_project_task_stats(
     - weekly: tuần hiện tại (Thứ Hai → Chủ Nhật)
     - monthly: 30 ngày gần nhất
     """
+    permission_service.ensure_project_read(project_id, current_user.id)
     result = service.get_project_stats(project_id, period)
     return ResponseSchema(data=result, message="Task stats fetched successfully")
 
@@ -77,11 +102,15 @@ def get_project_risk_stats(
     project_id: str,
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
     """
     Get aggregated risk statistics for the dashboard.
     Calculates overall project risk index, task risk distribution, and risk matrix points.
     """
+    permission_service.ensure_project_read(project_id, current_user.id)
     result = service.get_risk_stats(project_id)
     return ResponseSchema(
         data=result,
@@ -95,11 +124,15 @@ def get_recent_status_updates(
     limit: int = Query(default=10, ge=1, le=50),
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
     """
     Lấy danh sách các cập nhật trạng thái gần đây của dự án.
     Trộn với bảng Task, User, TaskStatus để trả về dữ liệu hiển thị.
     """
+    permission_service.ensure_project_read(project_id, current_user.id)
     results = service.get_recent_updates(project_id, limit)
     return ResponseSchema(data=results, message="Recent updates fetched successfully")
 
@@ -110,7 +143,11 @@ def get_project_task(
     task_id: str,
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_read(project_id, current_user.id)
     result = service.get_by_id(task_id)
     _ensure_task_in_project(result, project_id)
     return ResponseSchema(data=result)
@@ -123,7 +160,11 @@ def update_project_task(
     schema: TaskUpdate,
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_task_write(project_id, current_user.id)
     task = service.get_by_id(task_id)
     _ensure_task_in_project(task, project_id)
     result = service.patch(task_id, schema, user_id=current_user.id)
@@ -136,7 +177,11 @@ def delete_project_task(
     task_id: str,
     current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
+    permission_service: ProjectPermissionService = Depends(
+        get_project_permission_service
+    ),
 ):
+    permission_service.ensure_project_task_write(project_id, current_user.id)
     task = service.get_by_id(task_id)
     _ensure_task_in_project(task, project_id)
     service.patch_attr(task_id, "is_deleted", True)
