@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,7 +41,9 @@ class TaskActivity(BaseModel):
     )
 
     # Mentions - store list of user IDs
-    mentioned_user_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    mentioned_user_ids: Mapped[list | None] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=True
+    )
 
     # Relationships
     task: Mapped["Task"] = relationship("Task")

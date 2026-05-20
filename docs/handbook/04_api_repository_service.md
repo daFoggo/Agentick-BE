@@ -96,8 +96,15 @@ Use `UnitOfWork` when one action writes multiple repositories and must commit or
 
 ```python
 with UnitOfWork(self._repository.session_factory) as uow:
-    project = uow.projects.create(schema, auto_commit=False)
-    uow.project_members.create(..., auto_commit=False)
+    project_repository = uow.get_repo(ProjectRepository)
+    project_member_repository = uow.get_repo(ProjectMemberRepository)
+
+    project = project_repository.create(schema, auto_commit=False)
+    project_member_repository.create(..., auto_commit=False)
 ```
 
 Do not manually commit inside a `UnitOfWork` block. Let the context manager commit on success and rollback on failure.
+
+`UnitOfWork` is repository-agnostic. Request repositories with `get_repo(...)`
+inside the context block so they are lazily created with the active transaction
+session.

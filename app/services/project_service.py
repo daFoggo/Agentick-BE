@@ -118,8 +118,9 @@ class ProjectService(BaseService):
             default_index=1,
             completed_index=5,
         )
+        task_status_repository = uow.get_repo(TaskStatusRepository)
         for status in statuses:
-            uow.task_statuses.create(status, auto_commit=False)
+            task_status_repository.create(status, auto_commit=False)
 
         # Default Task Types
         types = _mark_single_default(
@@ -162,8 +163,9 @@ class ProjectService(BaseService):
             ],
             default_index=0,
         )
+        task_type_repository = uow.get_repo(TaskTypeRepository)
         for task_type in types:
-            uow.task_types.create(task_type, auto_commit=False)
+            task_type_repository.create(task_type, auto_commit=False)
 
         # Default Task Priorities
         priorities = _mark_single_default(
@@ -206,8 +208,9 @@ class ProjectService(BaseService):
             ],
             default_index=2,
         )
+        task_priority_repository = uow.get_repo(TaskPriorityRepository)
         for priority in priorities:
-            uow.task_priorities.create(priority, auto_commit=False)
+            task_priority_repository.create(priority, auto_commit=False)
 
     def create_project(self, schema: ProjectCreate, current_user: User):
         self._ensure_user_in_team(
@@ -216,10 +219,13 @@ class ProjectService(BaseService):
 
         # Use Unit of Work for atomic transaction across multiple tables
         with UnitOfWork(self._repository.session_factory) as uow:
-            project = uow.projects.create(schema, auto_commit=False)
+            project_repository = uow.get_repo(ProjectRepository)
+            project_member_repository = uow.get_repo(ProjectMemberRepository)
+
+            project = project_repository.create(schema, auto_commit=False)
             # Re-inject dynamically assigned ID so we can reference it
             # even before commit (since flush generates it)
-            uow.project_members.create(
+            project_member_repository.create(
                 {
                     "project_id": project.id,
                     "user_id": current_user.id,

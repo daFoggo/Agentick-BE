@@ -8,17 +8,17 @@ def test_sign_up_success(client, database) -> None:
         "email": "john@example.com",
         "password": "12345678",
         "name": "John Doe",
-        "avatarUrl": "https://example.com/avatar.png",
+        "avatar_url": "https://example.com/avatar.png",
     }
     response = client.post("/api/v1/auth/sign-up", json=payload)
 
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["id"]
     assert data["name"] == payload["name"]
     assert data["email"] == payload["email"]
-    assert data["avatarUrl"] == payload["avatarUrl"]
-    assert "createdAt" in data
+    assert data["avatar_url"] == payload["avatar_url"]
+    assert "created_at" in data
 
 
 def test_sign_in_success_after_sign_up(client, database) -> None:
@@ -38,7 +38,7 @@ def test_sign_in_success_after_sign_up(client, database) -> None:
     response = client.post("/api/v1/auth/sign-in", json=sign_in_payload)
 
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["access_token"]
     assert data["expiration"]
     assert data["user_info"]["email"] == sign_up_payload["email"]
@@ -82,4 +82,4 @@ def test_sign_in_wrong_password(client, database) -> None:
         "/api/v1/auth/sign-in", json={"email__eq": email, "password": password + "x"}
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 401

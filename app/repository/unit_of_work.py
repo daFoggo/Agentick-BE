@@ -1,9 +1,9 @@
 from contextlib import nullcontext
-from app.repository.project_repository import ProjectRepository
-from app.repository.project_member_repository import ProjectMemberRepository
-from app.repository.task_status_repository import TaskStatusRepository
-from app.repository.task_type_repository import TaskTypeRepository
-from app.repository.task_priority_repository import TaskPriorityRepository
+from typing import TypeVar, cast
+
+from app.repository.base_repository import BaseRepository
+
+RepositoryT = TypeVar("RepositoryT", bound=BaseRepository)
 
 
 class UnitOfWork:
@@ -11,25 +11,25 @@ class UnitOfWork:
         self.session_factory = session_factory
         self._cm = None
         self.session = None
+        self._repositories: dict[type[BaseRepository], BaseRepository] = {}
 
     def __enter__(self):
         # Correctly invoke the context manager to resolve the actual Session
         self._cm = self.session_factory()
         self.session = self._cm.__enter__()
-
-        # Create wrapper factory that injects our active session
-        # instead of creating a new one
-        def active_session_factory():
-            return nullcontext(self.session)
-
-        # Inject repositories configured with current atomic session
-        self.projects = ProjectRepository(active_session_factory)
-        self.project_members = ProjectMemberRepository(active_session_factory)
-        self.task_statuses = TaskStatusRepository(active_session_factory)
-        self.task_types = TaskTypeRepository(active_session_factory)
-        self.task_priorities = TaskPriorityRepository(active_session_factory)
-
+        self._repositories = {}
         return self
+
+    def get_repo(self, repository_class: type[RepositoryT]) -> RepositoryT:
+        if self.session is None:
+            raise RuntimeError(
+                "UnitOfWork must be entered before requesting repositories."
+            )
+        if repository_class not in self._repositories:
+            self._repositories[repository_class] = repository_class(
+                lambda: nullcontext(self.session)
+            )
+        return cast(RepositoryT, self._repositories[repository_class])
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
