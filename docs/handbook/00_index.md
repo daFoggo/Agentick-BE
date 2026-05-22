@@ -14,7 +14,7 @@ This handbook is the source of truth for Agentick Backend development patterns. 
 
 ## Core Decisions
 
-- The backend is a modular monolith.
+- The backend is a Monolith.
 - The main dependency direction is endpoint -> service -> repository -> model.
 - FastAPI dependency injection wires request-scoped sessions and services.
 - API responses use `ResponseSchema`.

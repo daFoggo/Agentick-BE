@@ -67,31 +67,45 @@ class TestingService:
         status_configs = [
             {
                 "name": "Backlog",
-                "color": "#6b7280",
+                "color": "#8da4c0",
+                "is_default": False,
+                "is_completed": False,
+                "order": 0.0,
+            },
+            {
+                "name": "To Do",
+                "color": "#6c8ebf",
                 "is_default": True,
                 "is_completed": False,
                 "order": 1.0,
             },
             {
                 "name": "In Progress",
-                "color": "#3b82f6",
+                "color": "#3BA6F1",
                 "is_default": False,
                 "is_completed": False,
                 "order": 2.0,
             },
             {
-                "name": "Blocked",
-                "color": "#ef4444",
+                "name": "In Review",
+                "color": "#fdba74",
                 "is_default": False,
                 "is_completed": False,
                 "order": 3.0,
             },
             {
-                "name": "Completed",
-                "color": "#10b981",
+                "name": "Blocked",
+                "color": "#fb7185",
+                "is_default": False,
+                "is_completed": False,
+                "order": 4.0,
+            },
+            {
+                "name": "Done",
+                "color": "#97D6AE",
                 "is_default": False,
                 "is_completed": True,
-                "order": 4.0,
+                "order": 5.0,
             },
         ]
         for config in status_configs:

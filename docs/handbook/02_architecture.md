@@ -1,6 +1,6 @@
 # Architecture
 
-Agentick Backend is a modular monolith. It deploys as one FastAPI service, but code must stay separated by responsibility so individual domains can evolve without tight coupling.
+Agentick Backend is a Monolith. It deploys as one FastAPI service, but code must stay separated by responsibility so individual domains can evolve without tight coupling.
 
 ## Dependency Direction
 

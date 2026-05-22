@@ -161,10 +161,3 @@ cython_debug/
 # OS files
 .DS_Store
 Thumbs.db
-docs/handbook/CLEAN_ARCHITECTURE_ANTIPATTERNS.md
-docs/handbook/CLEAN_ARCHITECTURE_CHEATSHEET.md
-docs/handbook/CLEAN_ARCHITECTURE_EXAMPLES.md
-docs/handbook/CLEAN_ARCHITECTURE_EXPLAINED.md
-docs/handbook/CLEAN_ARCHITECTURE_INDEX.md
-docs/handbook/CLEAN_ARCHITECTURE_PROJECT_ANALYSIS.md
-docs/handbook/CLEAN_ARCHITECTURE_UNCLE_BOB.md
