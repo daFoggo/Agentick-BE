@@ -9,10 +9,18 @@ class TaskService(BaseService):
 
     def add(self, schema: Any, acting_user_id: str = None) -> Any:
         result = self._repository.create(schema, acting_user_id=acting_user_id)
+        
+        member_ids = set()
         if hasattr(schema, "member_ids") and schema.member_ids:
+            member_ids.update(schema.member_ids)
+        if acting_user_id:
+            member_ids.add(acting_user_id)
+            
+        if member_ids:
             self._repository.create_task_assignment_notifications(
-                result.id, schema.member_ids
+                result.id, list(member_ids)
             )
+            
         return self.get_by_id(result.id)
 
     def get_list(self, schema: Any) -> Any:

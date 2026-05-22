@@ -259,7 +259,7 @@ class TaskRepository(BaseRepository):
 
                     if total_logged > 0:
                         item.actual_hours = float(total_logged)
-                    elif item.started_at and item.actual_hours == 0.0:
+                    elif item.started_at and item.completed_at and item.actual_hours == 0.0:
                         # Priority 2: Simple time delta if no logs and field is empty
                         duration = (
                             item.completed_at - item.started_at
